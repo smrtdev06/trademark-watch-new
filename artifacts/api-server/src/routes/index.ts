@@ -1,0 +1,40 @@
+import { Router, type IRouter } from "express";
+import healthRouter from "./health";
+import authRouter from "./auth";
+import dashboardRouter from "./dashboard";
+import usersRouter from "./users";
+import clientsRouter from "./clients";
+import monitoringRouter from "./monitoring";
+import alertsRouter from "./alerts";
+import domainsRouter from "./domains";
+import assessmentRouter from "./assessment";
+import logoRouter from "./logo";
+import socialRouter from "./social";
+import searchRouter from "./search";
+import productsRouter from "./products";
+import organizationsRouter from "./organizations";
+import settingsRouter from "./settings";
+import groupsRouter from "./groups";
+import cronTriggerRouter from "./cron-trigger";
+
+const router: IRouter = Router();
+
+router.use(healthRouter);
+router.use(authRouter);
+router.use(dashboardRouter);
+router.use(usersRouter);
+router.use(clientsRouter);
+router.use(monitoringRouter);
+router.use(alertsRouter);
+router.use(domainsRouter);
+router.use(assessmentRouter);
+router.use(logoRouter);
+router.use(socialRouter);
+router.use(searchRouter);
+router.use(productsRouter);
+router.use(organizationsRouter);
+router.use(settingsRouter);
+router.use(groupsRouter);
+router.use(cronTriggerRouter);
+
+export default router;

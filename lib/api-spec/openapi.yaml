@@ -1,0 +1,3458 @@
+openapi: 3.1.0
+info:
+  title: Api
+  version: 0.1.0
+  description: Trademark Monitoring Platform API
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+  - name: auth
+  - name: users
+  - name: clients
+  - name: monitoring
+  - name: alerts
+  - name: domains
+  - name: assessment
+  - name: logo
+  - name: social
+  - name: proprietor
+  - name: license
+  - name: opposition
+  - name: products
+  - name: billing
+  - name: organizations
+  - name: settings
+  - name: groups
+  - name: templates
+  - name: reporting
+  - name: dashboard
+
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  # ── Auth ──────────────────────────────────────────
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginBody"
+      responses:
+        "200":
+          description: Login success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+  /auth/register:
+    post:
+      operationId: register
+      tags: [auth]
+      summary: Register
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterBody"
+      responses:
+        "200":
+          description: Registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Current user info
+      responses:
+        "200":
+          description: User info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Logout
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  # ── Dashboard ─────────────────────────────────────
+  /dashboard/stats:
+    get:
+      operationId: getDashboardStats
+      tags: [dashboard]
+      summary: Dashboard statistics
+      responses:
+        "200":
+          description: Dashboard stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardStats"
+  /dashboard/recent-activity:
+    get:
+      operationId: getRecentActivity
+      tags: [dashboard]
+      summary: Recent activity feed
+      responses:
+        "200":
+          description: Activity list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ActivityItem"
+  /dashboard/records-count:
+    get:
+      operationId: getRecordsCount
+      tags: [dashboard]
+      summary: Chart records count
+      responses:
+        "200":
+          description: Records count data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecordsCount"
+
+  # ── Users ─────────────────────────────────────────
+  /users:
+    get:
+      operationId: listUsers
+      tags: [users]
+      summary: List all users (admin)
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/SearchParam"
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, suspended, all]
+      responses:
+        "200":
+          description: Users list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedUsers"
+    post:
+      operationId: createUser
+      tags: [users]
+      summary: Create user (admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUserBody"
+      responses:
+        "200":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+  /users/{id}:
+    get:
+      operationId: getUser
+      tags: [users]
+      summary: Get user by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: User details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+    delete:
+      operationId: deleteUser
+      tags: [users]
+      summary: Delete user permanently
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /users/{id}/suspend:
+    post:
+      operationId: suspendUser
+      tags: [users]
+      summary: Suspend user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Suspended
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /users/{id}/restore:
+    post:
+      operationId: restoreUser
+      tags: [users]
+      summary: Restore user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Restored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /users/{id}/limits:
+    get:
+      operationId: getUserLimits
+      tags: [users]
+      summary: Get user limits
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Limits
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserLimitsResponse"
+    put:
+      operationId: setUserLimit
+      tags: [users]
+      summary: Set user limit
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetLimitBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /users/profile:
+    get:
+      operationId: getProfile
+      tags: [users]
+      summary: Get current user profile
+      responses:
+        "200":
+          description: Profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+    put:
+      operationId: updateProfile
+      tags: [users]
+      summary: Update profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProfileBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+  /users/allowed-countries:
+    get:
+      operationId: getAllowedCountries
+      tags: [users]
+      summary: Get allowed countries for current user
+      responses:
+        "200":
+          description: Countries
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+  /users/my-limits:
+    get:
+      operationId: getMyLimits
+      tags: [users]
+      summary: Get current user limits with usage
+      responses:
+        "200":
+          description: Limits
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserLimitsResponse"
+  /users/{id}/group:
+    put:
+      operationId: setUserGroup
+      tags: [users]
+      summary: Set user group (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetUserGroupBody"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorMessage"
+
+  # ── User menu groups (admin) ─────────────────────
+  /groups:
+    get:
+      operationId: listGroups
+      tags: [groups]
+      summary: List groups (admin)
+      responses:
+        "200":
+          description: Groups
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Group"
+    post:
+      operationId: createGroup
+      tags: [groups]
+      summary: Create group (admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateGroupBody"
+      responses:
+        "200":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Group"
+        "409":
+          description: Name conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorMessage"
+  /groups/{id}:
+    put:
+      operationId: updateGroup
+      tags: [groups]
+      summary: Update group (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateGroupBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Group"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorMessage"
+        "409":
+          description: Name conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorMessage"
+    delete:
+      operationId: deleteGroup
+      tags: [groups]
+      summary: Delete group (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorMessage"
+
+  # ── Clients ───────────────────────────────────────
+  /clients:
+    get:
+      operationId: listClients
+      tags: [clients]
+      summary: List clients
+      parameters:
+        - $ref: "#/components/parameters/SearchParam"
+      responses:
+        "200":
+          description: Clients
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Client"
+    post:
+      operationId: createClient
+      tags: [clients]
+      summary: Add client
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateClientBody"
+      responses:
+        "200":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /clients/{id}:
+    delete:
+      operationId: deleteClient
+      tags: [clients]
+      summary: Remove client
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  # ── TM Watch (Monitoring) ─────────────────────────
+  /monitoring/keywords:
+    get:
+      operationId: listMonitoringKeywords
+      tags: [monitoring]
+      summary: List monitoring keywords
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/SearchParam"
+        - name: country
+          in: query
+          schema:
+            type: string
+        - name: clientId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Keywords
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedMonitoringKeywords"
+    post:
+      operationId: addMonitoringKeyword
+      tags: [monitoring]
+      summary: Add monitoring keyword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddKeywordBody"
+      responses:
+        "200":
+          description: Added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /monitoring/keywords/{id}:
+    delete:
+      operationId: deleteMonitoringKeyword
+      tags: [monitoring]
+      summary: Remove keyword
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /monitoring/keywords/{id}/requeue-scopes:
+    post:
+      operationId: requeueMonitoringKeywordScopes
+      tags: [monitoring]
+      summary: Remove existing scopes for keyword and enqueue fresh ones
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Scopes re-queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /monitoring/results:
+    get:
+      operationId: listMonitoringResults
+      tags: [monitoring]
+      summary: List monitoring results
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/SearchParam"
+        - name: country
+          in: query
+          description: Source country(s); comma-separated for OR (PHP multi-select)
+          schema:
+            type: string
+        - name: journalDate
+          in: query
+          schema:
+            type: string
+        - name: journalDates
+          in: query
+          description: Comma-separated journal dates (OR)
+          schema:
+            type: string
+        - name: clientId
+          in: query
+          schema:
+            type: integer
+        - name: clientIds
+          in: query
+          description: Comma-separated client ids (OR)
+          schema:
+            type: string
+        - name: keywordId
+          in: query
+          schema:
+            type: integer
+        - name: keywords
+          in: query
+          description: Comma-separated watch keywords (exact match on monitoring_keywords.keyword)
+          schema:
+            type: string
+        - name: classFilter
+          in: query
+          description: Comma-separated Nice class numbers; filters conflict_class (PHP)
+          schema:
+            type: string
+        - name: conflictClasses
+          in: query
+          schema:
+            type: string
+        - name: conflict
+          in: query
+          description: Substring match on conflict tm applied for
+          schema:
+            type: string
+        - name: conflictAppno
+          in: query
+          schema:
+            type: string
+        - name: scores
+          in: query
+          description: Comma-separated 100,90,80,70 bucket filters
+          schema:
+            type: string
+        - name: sortBy
+          in: query
+          description: Column to sort by (PHP TM Watch default journalDate desc)
+          schema:
+            type: string
+            enum:
+              - journalDate
+              - sourceKeyword
+              - country
+              - conflict
+              - appno
+              - class
+              - client
+              - score
+        - name: sortDir
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+      responses:
+        "200":
+          description: Results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedMonitoringResults"
+  /monitoring/results/{id}/favorite:
+    post:
+      operationId: toggleMonitoringResultFavorite
+      tags: [monitoring]
+      summary: Toggle favorite star (PHP ViewResults favorite)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: New favorite state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MonitoringResultFavoriteToggle"
+        "403":
+          description: Forbidden
+        "404":
+          description: Not found
+  /monitoring/results/export:
+    post:
+      operationId: exportMonitoringResults
+      tags: [monitoring]
+      summary: Export monitoring results
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExportBody"
+      responses:
+        "200":
+          description: Export file
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExportResponse"
+  /monitoring/import:
+    post:
+      operationId: importMonitoringKeywords
+      tags: [monitoring]
+      summary: Import keywords from file
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                tmname:
+                  type: string
+                class:
+                  type: string
+                country:
+                  type: string
+                client:
+                  type: string
+      responses:
+        "200":
+          description: Import result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportResponse"
+  /monitoring/filters:
+    get:
+      operationId: getMonitoringFilters
+      tags: [monitoring]
+      summary: Get available filter values
+      responses:
+        "200":
+          description: Filter values
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MonitoringFilters"
+
+  # ── Alerts ────────────────────────────────────────
+  /alerts:
+    get:
+      operationId: listAlerts
+      tags: [alerts]
+      summary: List alerts
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/SearchParam"
+        - name: type
+          in: query
+          schema:
+            type: string
+        - name: clientId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Alerts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedAlerts"
+    post:
+      operationId: createAlert
+      tags: [alerts]
+      summary: Create alert
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAlertBody"
+      responses:
+        "200":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /alerts/{id}:
+    delete:
+      operationId: deleteAlert
+      tags: [alerts]
+      summary: Delete alert
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /alerts/results:
+    get:
+      operationId: listAlertResults
+      tags: [alerts]
+      summary: List alert results
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+        - name: alertId
+          in: query
+          schema:
+            type: integer
+        - name: type
+          in: query
+          schema:
+            type: string
+        - name: clientId
+          in: query
+          schema:
+            type: integer
+        - name: keyword
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedAlertResults"
+  /alerts/results/export:
+    post:
+      operationId: exportAlertResults
+      tags: [alerts]
+      summary: Export alert results
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExportBody"
+      responses:
+        "200":
+          description: Export
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExportResponse"
+  /alerts/filters:
+    get:
+      operationId: getAlertFilters
+      tags: [alerts]
+      summary: Get alert filter values
+      responses:
+        "200":
+          description: Filters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertFilters"
+
+  # ── Domain Monitoring ─────────────────────────────
+  /domains:
+    get:
+      operationId: listDomains
+      tags: [domains]
+      summary: List domains
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/SearchParam"
+      responses:
+        "200":
+          description: Domains
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedDomains"
+    post:
+      operationId: addDomain
+      tags: [domains]
+      summary: Add domain
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddDomainBody"
+      responses:
+        "200":
+          description: Added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /domains/{id}:
+    delete:
+      operationId: deleteDomain
+      tags: [domains]
+      summary: Remove domain
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /domains/results:
+    get:
+      operationId: listDomainResults
+      tags: [domains]
+      summary: List domain results
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+        - name: domainId
+          in: query
+          schema:
+            type: integer
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+        - name: clientId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedDomainResults"
+  /domains/results/export:
+    post:
+      operationId: exportDomainResults
+      tags: [domains]
+      summary: Export domain results
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExportBody"
+      responses:
+        "200":
+          description: Export
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExportResponse"
+
+  # ── Assessment ────────────────────────────────────
+  /assessment:
+    post:
+      operationId: searchAssessment
+      tags: [assessment]
+      summary: Search assessment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssessmentSearchBody"
+      responses:
+        "200":
+          description: Results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssessmentResponse"
+  /assessment/export:
+    post:
+      operationId: exportAssessment
+      tags: [assessment]
+      summary: Export assessment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssessmentExportBody"
+      responses:
+        "200":
+          description: Export
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExportResponse"
+  /assessment/risk-scoring:
+    post:
+      operationId: getRiskScoring
+      tags: [assessment]
+      summary: Get risk scoring data
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                keyword:
+                  type: string
+              required:
+                - keyword
+      responses:
+        "200":
+          description: Risk data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RiskScoringResponse"
+
+  # ── Logo Watch ────────────────────────────────────
+  /logo:
+    get:
+      operationId: listLogoSearches
+      tags: [logo]
+      summary: List logo searches
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+      responses:
+        "200":
+          description: Logo searches
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedLogoSearches"
+    post:
+      operationId: addLogoSearch
+      tags: [logo]
+      summary: Add logo search
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                clientId:
+                  type: integer
+      responses:
+        "200":
+          description: Added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /logo/{id}:
+    delete:
+      operationId: deleteLogoSearch
+      tags: [logo]
+      summary: Delete logo search
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /logo/results:
+    get:
+      operationId: listLogoResults
+      tags: [logo]
+      summary: List logo search results
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+        - name: logoSearchId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedLogoResults"
+
+  # ── Social Watch (ScaleSerp) ──────────────────────
+  /social/keywords:
+    get:
+      operationId: listSocialKeywords
+      tags: [social]
+      summary: List social watch keywords
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/SearchParam"
+      responses:
+        "200":
+          description: Keywords
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedSocialKeywords"
+    post:
+      operationId: addSocialKeyword
+      tags: [social]
+      summary: Add social keyword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddSocialKeywordBody"
+      responses:
+        "200":
+          description: Added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /social/keywords/{id}:
+    delete:
+      operationId: deleteSocialKeyword
+      tags: [social]
+      summary: Remove social keyword
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /social/results:
+    get:
+      operationId: listSocialResults
+      tags: [social]
+      summary: List social watch results
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/SearchParam"
+        - name: keywordId
+          in: query
+          schema:
+            type: integer
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedSocialResults"
+  /social/results/export:
+    post:
+      operationId: exportSocialResults
+      tags: [social]
+      summary: Export social results
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExportBody"
+      responses:
+        "200":
+          description: Export
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExportResponse"
+
+  # ── Proprietor Search ─────────────────────────────
+  /proprietor:
+    post:
+      operationId: searchProprietor
+      tags: [proprietor]
+      summary: Search by proprietor
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProprietorSearchBody"
+      responses:
+        "200":
+          description: Results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProprietorSearchResponse"
+  /proprietor/export:
+    post:
+      operationId: exportProprietorResults
+      tags: [proprietor]
+      summary: Export proprietor results
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExportBody"
+      responses:
+        "200":
+          description: Export
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExportResponse"
+
+  # ── License Search ────────────────────────────────
+  /license:
+    post:
+      operationId: searchLicense
+      tags: [license]
+      summary: Search license records
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LicenseSearchBody"
+      responses:
+        "200":
+          description: Results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LicenseSearchResponse"
+
+  # ── Search Opposition ─────────────────────────────
+  /opposition:
+    post:
+      operationId: searchOpposition
+      tags: [opposition]
+      summary: Search opposition
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OppositionSearchBody"
+      responses:
+        "200":
+          description: Results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OppositionSearchResponse"
+  /opposition/export:
+    post:
+      operationId: exportOppositionResults
+      tags: [opposition]
+      summary: Export opposition results
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExportBody"
+      responses:
+        "200":
+          description: Export
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExportResponse"
+
+  # ── Products ──────────────────────────────────────
+  /products:
+    get:
+      operationId: listProducts
+      tags: [products]
+      summary: List products
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+        - $ref: "#/components/parameters/SearchParam"
+      responses:
+        "200":
+          description: Products
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedProducts"
+    post:
+      operationId: createProduct
+      tags: [products]
+      summary: Create product (admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProductBody"
+      responses:
+        "200":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+  /products/{id}:
+    get:
+      operationId: getProduct
+      tags: [products]
+      summary: Get product details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Product
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+    put:
+      operationId: updateProduct
+      tags: [products]
+      summary: Update product
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProductBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+    delete:
+      operationId: deleteProduct
+      tags: [products]
+      summary: Delete product
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /products/{id}/checkout:
+    post:
+      operationId: checkoutProduct
+      tags: [products]
+      summary: Checkout/purchase product
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                couponCode:
+                  type: string
+                paymentMethod:
+                  type: string
+      responses:
+        "200":
+          description: Order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderResponse"
+  /products/apply-coupon:
+    post:
+      operationId: applyCoupon
+      tags: [products]
+      summary: Apply coupon to product
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                code:
+                  type: string
+                productId:
+                  type: integer
+              required:
+                - code
+                - productId
+      responses:
+        "200":
+          description: Coupon applied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CouponResponse"
+
+  # ── Billing ───────────────────────────────────────
+  /billing/invoices:
+    get:
+      operationId: listInvoices
+      tags: [billing]
+      summary: List invoices/orders
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+      responses:
+        "200":
+          description: Invoices
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedOrders"
+
+  # ── Coupons ───────────────────────────────────────
+  /coupons:
+    get:
+      operationId: listCoupons
+      tags: [billing]
+      summary: List coupons (admin)
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+      responses:
+        "200":
+          description: Coupons
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedCoupons"
+    post:
+      operationId: createCoupon
+      tags: [billing]
+      summary: Generate coupon (admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCouponBody"
+      responses:
+        "200":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Coupon"
+
+  # ── Organizations ─────────────────────────────────
+  /organizations:
+    get:
+      operationId: listOrganizations
+      tags: [organizations]
+      summary: List organizations (admin)
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+      responses:
+        "200":
+          description: Organizations
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedOrganizations"
+  /organizations/my:
+    get:
+      operationId: getMyOrganization
+      tags: [organizations]
+      summary: Get current user organization
+      responses:
+        "200":
+          description: Organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationDetail"
+
+  # ── Settings ──────────────────────────────────────
+  /settings:
+    get:
+      operationId: getSettings
+      tags: [settings]
+      summary: Get system settings
+      responses:
+        "200":
+          description: Settings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Setting"
+    put:
+      operationId: updateSettings
+      tags: [settings]
+      summary: Update settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: "#/components/schemas/Setting"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /settings/roles:
+    get:
+      operationId: listRoles
+      tags: [settings]
+      summary: List roles
+      responses:
+        "200":
+          description: Roles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Role"
+  /settings/user-settings:
+    get:
+      operationId: getUserSettings
+      tags: [settings]
+      summary: Get user-specific settings
+      responses:
+        "200":
+          description: User settings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/UserSetting"
+    put:
+      operationId: updateUserSettings
+      tags: [settings]
+      summary: Update user settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: "#/components/schemas/UserSetting"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  # ── Templates ─────────────────────────────────────
+  /templates:
+    get:
+      operationId: listTemplates
+      tags: [templates]
+      summary: List email templates
+      responses:
+        "200":
+          description: Templates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Template"
+  /templates/{id}:
+    get:
+      operationId: getTemplate
+      tags: [templates]
+      summary: Get template
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Template
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Template"
+    put:
+      operationId: updateTemplate
+      tags: [templates]
+      summary: Update template
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTemplateBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Template"
+
+  # ── Reporting ─────────────────────────────────────
+  /reporting/logs:
+    get:
+      operationId: listCommunicationLogs
+      tags: [reporting]
+      summary: List communication logs
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+        - name: type
+          in: query
+          schema:
+            type: string
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Logs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedNotificationLogs"
+  /reporting/query-logs:
+    get:
+      operationId: listQueryLogs
+      tags: [reporting]
+      summary: List query logs (admin)
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+      responses:
+        "200":
+          description: Logs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedQueryLogs"
+  /reporting/user-stats:
+    get:
+      operationId: listUserStats
+      tags: [reporting]
+      summary: User statistics (admin)
+      parameters:
+        - $ref: "#/components/parameters/PageParam"
+      responses:
+        "200":
+          description: Stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedUserStats"
+
+  # ── Files ─────────────────────────────────────────
+  /files:
+    get:
+      operationId: listFiles
+      tags: [reporting]
+      summary: List export files
+      responses:
+        "200":
+          description: Files
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ExportFile"
+  /files/{filename}:
+    get:
+      operationId: downloadFile
+      tags: [reporting]
+      summary: Download file
+      parameters:
+        - name: filename
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: File
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+
+components:
+  parameters:
+    PageParam:
+      name: page
+      in: query
+      schema:
+        type: integer
+        default: 1
+    SearchParam:
+      name: search
+      in: query
+      schema:
+        type: string
+
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required: [status]
+
+    SuccessResponse:
+      type: object
+      properties:
+        status:
+          type: integer
+        message:
+          type: string
+      required: [status, message]
+
+    ErrorMessage:
+      type: object
+      properties:
+        status:
+          type: integer
+        message:
+          type: string
+      required: [message]
+
+    LoginBody:
+      type: object
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+      required: [email, password]
+
+    RegisterBody:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        password:
+          type: string
+        phone:
+          type: string
+      required: [name, email, password]
+
+    AuthResponse:
+      type: object
+      properties:
+        status:
+          type: integer
+        user:
+          $ref: "#/components/schemas/User"
+        token:
+          type: string
+      required: [status]
+
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        role:
+          type: string
+        groupId:
+          type: integer
+          nullable: true
+        groupPermissions:
+          type: object
+          additionalProperties:
+            type: boolean
+          nullable: true
+        emailVerifiedAt:
+          type: string
+          nullable: true
+        mobileVerifiedAt:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+        deletedAt:
+          type: string
+          nullable: true
+        profile:
+          $ref: "#/components/schemas/UserProfileData"
+      required: [id, name, email, role]
+
+    UserProfileData:
+      type: object
+      properties:
+        organization:
+          type: string
+        address1:
+          type: string
+        address2:
+          type: string
+        city:
+          type: string
+        pincode:
+          type: string
+        country:
+          type: string
+        gstNumber:
+          type: string
+        organizationType:
+          type: string
+        designation:
+          type: string
+
+    PaginatedUsers:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/User"
+        total:
+          type: integer
+        page:
+          type: integer
+        perPage:
+          type: integer
+        totalPages:
+          type: integer
+      required: [data, total, page, perPage, totalPages]
+
+    CreateUserBody:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        password:
+          type: string
+        role:
+          type: string
+      required: [name, email, password]
+
+    SetUserGroupBody:
+      type: object
+      properties:
+        groupId:
+          type: integer
+          nullable: true
+      required: [groupId]
+
+    Group:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        menuPermissions:
+          type: object
+          additionalProperties:
+            type: boolean
+        createdAt:
+          type: string
+      required: [id, name, menuPermissions, createdAt]
+
+    CreateGroupBody:
+      type: object
+      properties:
+        name:
+          type: string
+        menuPermissions:
+          type: object
+          additionalProperties:
+            type: boolean
+      required: [name]
+
+    UpdateGroupBody:
+      type: object
+      properties:
+        name:
+          type: string
+        menuPermissions:
+          type: object
+          additionalProperties:
+            type: boolean
+
+    SetLimitBody:
+      type: object
+      properties:
+        name:
+          type: string
+        value:
+          type: integer
+      required: [name, value]
+
+    UserLimitsResponse:
+      type: object
+      properties:
+        limits:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              value:
+                type: integer
+            required: [name, value]
+        used:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              value:
+                type: integer
+            required: [name, value]
+      required: [limits, used]
+
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        organization:
+          type: string
+        address1:
+          type: string
+        address2:
+          type: string
+        city:
+          type: string
+        pincode:
+          type: string
+        country:
+          type: string
+        gstNumber:
+          type: string
+        organizationType:
+          type: string
+        designation:
+          type: string
+      required: [id, userId]
+
+    UpdateProfileBody:
+      type: object
+      properties:
+        organization:
+          type: string
+        address1:
+          type: string
+        address2:
+          type: string
+        city:
+          type: string
+        pincode:
+          type: string
+        country:
+          type: string
+        gstNumber:
+          type: string
+        organizationType:
+          type: string
+        designation:
+          type: string
+        companyName:
+          type: string
+        address:
+          type: string
+        pdfLogo:
+          type: string
+
+    DashboardStats:
+      type: object
+      properties:
+        usersCount:
+          type: integer
+        alertsCount:
+          type: integer
+        keywordsCount:
+          type: integer
+        clientsCount:
+          type: integer
+        logoCount:
+          type: integer
+        latestJournal:
+          type: string
+        latestCountry:
+          type: string
+        domainsCount:
+          type: integer
+        socialKeywordsCount:
+          type: integer
+      required: [alertsCount, keywordsCount, clientsCount, logoCount, latestJournal, latestCountry]
+
+    ActivityItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+        description:
+          type: string
+        createdAt:
+          type: string
+        metadata:
+          type: object
+      required: [id, type, description, createdAt]
+
+    RecordsCount:
+      type: object
+      properties:
+        monitoring:
+          type: integer
+        alerts:
+          type: integer
+        domains:
+          type: integer
+        social:
+          type: integer
+        logos:
+          type: integer
+      required: [monitoring, alerts, domains, social, logos]
+
+    Client:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email1:
+          type: string
+        email2:
+          type: string
+        email3:
+          type: string
+        phone1:
+          type: string
+        phone2:
+          type: string
+        phone3:
+          type: string
+        address1:
+          type: string
+        address2:
+          type: string
+        address3:
+          type: string
+        country:
+          type: string
+        city:
+          type: string
+        pincode:
+          type: string
+        clientType:
+          type: string
+        preferredContactType:
+          type: string
+        allowControlPanel:
+          type: boolean
+        userId:
+          type: integer
+        userName:
+          type: string
+        userEmail:
+          type: string
+        createdAt:
+          type: string
+      required: [id, name]
+
+    CreateClientBody:
+      type: object
+      properties:
+        name:
+          type: string
+        email1:
+          type: string
+        email2:
+          type: string
+        email3:
+          type: string
+        phone1:
+          type: string
+        phone2:
+          type: string
+        phone3:
+          type: string
+        address1:
+          type: string
+        address2:
+          type: string
+        address3:
+          type: string
+        country:
+          type: string
+        city:
+          type: string
+        pincode:
+          type: string
+        clientType:
+          type: string
+        preferredContactType:
+          type: string
+          enum: [email, sms, both]
+        allowControlPanel:
+          type: boolean
+      required: [name]
+
+    MonitoringKeyword:
+      type: object
+      properties:
+        id:
+          type: integer
+        keyword:
+          type: string
+        country:
+          type: string
+        class:
+          type: string
+        userId:
+          type: integer
+        clientId:
+          type: integer
+        clientName:
+          type: string
+        userName:
+          type: string
+        userEmail:
+          type: string
+        createdAt:
+          type: string
+      required: [id, keyword, country, class]
+
+    PaginatedMonitoringKeywords:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/MonitoringKeyword"
+        total:
+          type: integer
+        page:
+          type: integer
+        perPage:
+          type: integer
+        totalPages:
+          type: integer
+      required: [data, total, page, perPage, totalPages]
+
+    AddKeywordBody:
+      type: object
+      properties:
+        keyword:
+          type: string
+        country:
+          type: string
+        class:
+          type: string
+        clientId:
+          type: integer
+      required: [keyword, country, class, clientId]
+
+    MonitoringResult:
+      type: object
+      properties:
+        id:
+          type: integer
+        keywordId:
+          type: integer
+        keyword:
+          type: string
+        sourceKeyword:
+          type: string
+          description: monitoring_keywords.keyword (PHP Keyword column)
+        wordToCompare:
+          type: string
+        appno:
+          type: string
+        journalDate:
+          type: string
+        score:
+          type: number
+        scoreLabel:
+          type: string
+          description: Very High / High / Medium / Low (PHP MonitoringScoreForHumans)
+        conflictClass:
+          type: string
+        conflictClassDisplay:
+          type: string
+          description: Pipes replaced with comma-space for display
+        conflictCountry:
+          type: string
+        conflictStatus:
+          type: string
+        tmAppliedFor:
+          type: string
+        userDetail:
+          type: string
+        country:
+          type: string
+        class:
+          type: string
+        clientName:
+          type: string
+        userName:
+          type: string
+        userEmail:
+          type: string
+        journalCopyUrl:
+          type: string
+        favorite:
+          type: boolean
+          description: PHP TM Watch star / btn-warning when true
+      required: [id, keyword, appno]
+
+    MonitoringResultFavoriteToggle:
+      type: object
+      properties:
+        id:
+          type: integer
+        favorite:
+          type: boolean
+      required: [id, favorite]
+
+    PaginatedMonitoringResults:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/MonitoringResult"
+        total:
+          type: integer
+        page:
+          type: integer
+        perPage:
+          type: integer
+        totalPages:
+          type: integer
+      required: [data, total, page, perPage, totalPages]
+
+    ExportBody:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [xlsx, pdf]
+        dateFrom:
+          type: string
+        dateTo:
+          type: string
+        selectedClients:
+          type: array
+          items:
+            type: string
+        selectedCountries:
+          type: array
+          items:
+            type: string
+        filters:
+          type: object
+      required: [type]
+
+    ExportResponse:
+      type: object
+      properties:
+        status:
+          type: integer
+        file:
+          type: string
+      required: [status]
+
+    ImportResponse:
+      type: object
+      properties:
+        status:
+          type: integer
+        added:
+          type: integer
+        message:
+          type: string
+      required: [status, added]
+
+    MonitoringFilters:
+      type: object
+      properties:
+        journals:
+          type: array
+          items:
+            type: string
+        countries:
+          type: array
+          items:
+            type: string
+        keywords:
+          type: array
+          items:
+            type: string
+        classes:
+          type: array
+          items:
+            type: integer
+        clients:
+          type: array
+          items:
+            $ref: "#/components/schemas/Client"
+        scoreOptions:
+          type: array
+          items:
+            type: object
+            properties:
+              value:
+                type: integer
+              label:
+                type: string
+      required: [journals, countries, keywords, classes]
+
+    Alert:
+      type: object
+      properties:
+        id:
+          type: integer
+        keyword:
+          type: string
+        type:
+          type: string
+        userId:
+          type: integer
+        clientId:
+          type: integer
+        clientName:
+          type: string
+        country:
+          type: string
+        class:
+          type: string
+        businessTypeSpecific:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+      required: [id, keyword, type]
+
+    PaginatedAlerts:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Alert"
+        total:
+          type: integer
+        page:
+          type: integer
+        perPage:
+          type: integer
+        totalPages:
+          type: integer
+      required: [data, total, page, perPage, totalPages]
+
+    CreateAlertBody:
+      type: object
+      properties:
+        keyword:
+          type: string
+        type:
+          type: string
+        clientId:
+          type: integer
+        country:
+          type: string
+        class:
+          type: string
+        businessTypeSpecific:
+          type: array
+          items:
+            type: string
+      required: [keyword, type]
+
+    AlertResult:
+      type: object
+      properties:
+        id:
+          type: integer
+        alertId:
+          type: integer
+        keyword:
+          type: string
+        type:
+          type: string
+        result:
+          type: object
+        clientName:
+          type: string
+        createdAt:
+          type: string
+      required: [id, alertId]
+
+    PaginatedAlertResults:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/AlertResult"
+        total:
+          type: integer
+        page:
+          type: integer
+        perPage:
+          type: integer
+        totalPages:
+          type: integer
+      required: [data, total, page, perPage, totalPages]
+
+    AlertFilters:
+      type: object
+      properties:
+        types:
+          type: array
+          items:
+            type: string
+        keywords:
+          type: array
+          items:
+            type: string
+        clients:
+          type: array
+          items:
+            $ref: "#/components/schemas/Client"
+      required: [types, keywords]
+
+    Domain:
+      type: object
+      properties:
+        id:
+          type: integer
+        domain:
+          type: string
+        searchType:
+          type: string
+          enum: [starts, contains, ends]
+        userId:
+          type: integer
+        clientId:
+          type: integer
+        userName:
+          type: string
+        userEmail:
+          type: string
+        createdAt:
+          type: string
+      required: [id, domain, searchType]
+
+    PaginatedDomains:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Domain"
+        total:
+          type: integer
+        page:
+          type: integer
+        perPage:
+          type: integer
+        totalPages:
+          type: integer
+      required: [data, total, page, perPage, totalPages]
+
+    AddDomainBody:
+      type: object
+      properties:
+        domain:
+          type: string
+        searchType:
+          type: string
+          enum: [starts, contains, ends]
+        clientId:
+          type: integer
+      required: [domain, searchType]
+
+    DomainResult:
+      type: object
+      properties:
+        id:
+          type: integer
+        domainMonitoringId:
+          type: integer
+        domain:
+          type: string
+        searchType:
+          type: string
+        result:
+          type: string
+        registrationDate:
+          type: string
+        expiryDate:
+          type: string
+        registrar:
+          type: string
+        clientName:
+          type: string
+        createdAt:
+          type: string
+      required: [id, domainMonitoringId]
+
+    PaginatedDomainResults:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/DomainResult"
+        total:
+          type: integer
+        page:
+          type: integer
+        perPage:
+          type: integer
+        totalPages:
+          type: integer
+      required: [data, total, page, perPage, totalPages]
+
+    AssessmentSearchBody:
+      type: object
+      properties:
+        keyword:
+          type: string
+        country:
+          type: string
+        class:
+          type: string
+        searchMode:
+          type: boolean
+      required: [keyword]
+
+    AssessmentResponse:
+      type: object
+      properties:
+        status:
+          type: integer
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/AssessmentItem"
+      required: [status]
+
+    AssessmentItem:
+      type: object
+      properties:
+        appno:
+          type: string
+        appliedFor:
+          type: string
+        status:
+          type: string
+        companyName:
+          type: string
+        class:
+          type: string
+        validUpTo:
+          type: string
+        userDetail:
+          type: string
+        dateOfApp:
+          type: string
+        goodsAndServices:
+          type: string
+        score:
+          type: string
+      required: [appno, appliedFor, status]
+
+    AssessmentExportBody:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [xlsx, pdf]
+        name:
+          type: string
+        items:
+          type: string
+        searchMode:
+          type: boolean
+        includeScore:
+          type: boolean
+      required: [type, name, items]
+
+    RiskScoringResponse:
+      type: object
+      properties:
+        overallScore:
+          type: number
+        dropOutRate:
+          type: number
+        renewalRate:
+          type: number
+        exactVsVariation:
+          type: object
+        userDetails:
+          type: object
+      required: [overallScore]
+
+    LogoSearch:
+      type: object
+      properties:
+        id:
+          type: integer
+        file:
+          type: string
+        fileUrl:
+          type: string
+        userId:
+          type: integer
+        clientId:
+          type: integer
+        clientName:
+          type: string
+        status:
+          type: string
+        createdAt:
+          type: string
+      required: [id, file]
+
+    PaginatedLogoSearches:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/LogoSearch"
+        total:
+          type: integer
+        page:
+          type: integer
+        perPage:
+          type: integer
+        totalPages:
+          type: integer
+      required: [data, total, page, perPage, totalPages]
+
+    LogoResult:
+      type: object
+      properties:
+        id:
+          type: integer
+        logoSearchId:
+          type: integer
+        matchScore:
+          type: number
+        imageUrl:
+          type: string
+        trademarkName:
+          type: string
+        appno:
+          type: string
+        class:
+          type: string
+        country:
+          type: string
+        createdAt:
+          type: string
+      required: [id, logoSearchId]
+
+    PaginatedLogoResults:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/LogoResult"
+        total:
+          type: integer
+        page:
+          type: integer
+        perPage:
+          type: integer
+        totalPages:
+          type: integer
+      required: [data, total, page, perPage, totalPages]
+
+    SocialKeyword:
+      type: object
+      properties:
+        id:
+          type: integer
+        keyword:
+          type: string
+        site:
+          type: string
+        freq:
+          type: integer
+        category:
+          type: string
+        userId:
+          type: integer
+        clientId:
+          type: integer
+        clientName:
+          type: string
+        userName:
+          type: string
+        userEmail:
+          type: string
+        createdAt:
+          type: string
+      required: [id, keyword, site, freq]
+
+    PaginatedSocialKeywords:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/SocialKeyword"
+        total:
+          type: integer
+        page:
+          type: integer
+        perPage:
+          type: integer
+        totalPages:
+          type: integer
+      required: [data, total, page, perPage, totalPages]
+
+    AddSocialKeywordBody:
+      type: object
+      properties:
+        keyword:
+          type: string
+        site:
+          type: string
+        freq:
+          type: integer
+        category:
+          type: string
+        clientId:
+          type: integer
+      required: [keyword, site, freq]
+
+    SocialResult:
+      type: object
+      properties:
+        id:
+          type: integer
+        scaleSerpId:
+          type: integer
+        keyword:
+          type: string
+        site:
+          type: string
+        title:
+          type: string
+        link:
+          type: string
+        snippet:
+          type: string
+        position:
+          type: integer
+        imageFile:
+          type: string
+        imageUrl:
+          type: string
+        clientName:
+          type: string
+        userName:
+          type: string
+        createdAt:
+          type: string
+      required: [id, scaleSerpId]
+
+    PaginatedSocialResults:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/SocialResult"
+        total:
+          type: integer
+        page:
+          type: integer
+        perPage:
+          type: integer
+        totalPages:
+          type: integer
+      required: [data, total, page, perPage, totalPages]
+
+    ProprietorSearchBody:
+      type: object
+      properties:
+        name:
+          type: string
+        country:
+          type: string
+        class:
+          type: string
+      required: [name]
+
+    ProprietorSearchResponse:
+      type: object
+      properties:
+        status:
+          type: integer
+        data:
+          type: array
+          items:
+            type: object
+      required: [status]
+
+    LicenseSearchBody:
+      type: object
+      properties:
+        keyword:
+          type: string
+        type:
+          type: string
+          enum: [citations, fssai, mca, udyaam, all]
+        startsWith:
+          type: string
+        country:
+          type: string
+      required: [keyword, type]
+
+    LicenseSearchResponse:
+      type: object
+      properties:
+        status:
+          type: integer
+        data:
+          type: array
+          items:
+            type: object
+      required: [status]
+
+    OppositionSearchBody:
+      type: object
+      properties:
+        keyword:
+          type: string
+        country:
+          type: string
+        class:
+          type: string
+      required: [keyword]
+
+    OppositionSearchResponse:
+      type: object
+      properties:
+        status:
+          type: integer
+        data:
+          type: array
+          items:
+            type: object
+      required: [status]
+
+    Product:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+        price:
+          type: number
+        currency:
+          type: string
+        status:
+          type: integer
+        allowedFunctions:
+          type: array
+          items:
+            type: integer
+        allowedPaymentMethods:
+          type: array
+          items:
+            type: integer
+        allowedCountries:
+          type: array
+          items:
+            type: string
+        allowedAmountOfKeywords:
+          type: integer
+        allowedAmountOfDomains:
+          type: integer
+        allowedAmountOfAssessments:
+          type: integer
+        allowedAmountOfImageUploads:
+          type: integer
+        tax:
+          type: number
+        transactionFee:
+          type: number
+        freeTrial:
+          type: boolean
+        freeTrialDays:
+          type: integer
+        daysValidAfterPayment:
+          type: integer
+        finalPrice:
+          type: number
+        createdAt:
+          type: string
+      required: [id, name, price]
+
+    PaginatedProducts:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Product"
+        total:
+          type: integer
+        page:
+          type: integer
+        perPage:
+          type: integer
+        totalPages:
+          type: integer
+      required: [data, total, page, perPage, totalPages]
+
+    CreateProductBody:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        price:
+          type: number
+        currency:
+          type: string
+        status:
+          type: integer
+        allowedFunctions:
+          type: array
+          items:
+            type: integer
+        allowedPaymentMethods:
+          type: array
+          items:
+            type: integer
+        allowedCountries:
+          type: array
+          items:
+            type: string
+        allowedAmountOfKeywords:
+          type: integer
+        allowedAmountOfDomains:
+          type: integer
+        allowedAmountOfAssessments:
+          type: integer
+        allowedAmountOfImageUploads:
+          type: integer
+        tax:
+          type: number
+        transactionFee:
+          type: number
+        freeTrial:
+          type: boolean
+        freeTrialDays:
+          type: integer
+        daysValidAfterPayment:
+          type: integer
+      required: [name, price]
+
+    OrderResponse:
+      type: object
+      properties:
+        status:
+          type: integer
+        order:
+          $ref: "#/components/schemas/Order"
+        paymentUrl:
+          type: string
+      required: [status]
+
+    Order:
+      type: object
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        status:
+          type: string
+        totalAmount:
+          type: number
+        subtotalAmount:
+          type: number
+        totalTax:
+          type: number
+        totalDiscount:
+          type: number
+        couponId:
+          type: integer
+          nullable: true
+        productName:
+          type: string
+        createdAt:
+          type: string
+      required: [id, status, totalAmount]
+
+    PaginatedOrders:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Order"
+        total:
+          type: integer
+        page:
+          type: integer
+        perPage:
+          type: integer
+        totalPages:
+          type: integer
+      required: [data, total, page, perPage, totalPages]
+
+    CouponResponse:
+      type: object
+      properties:
+        status:
+          type: integer
+        data:
+          type: object
+          properties:
+            totalDiscount:
+              type: number
+            totalAmount:
+              type: number
+            transactionFee:
+              type: number
+      required: [status]
+
+    Coupon:
+      type: object
+      properties:
+        id:
+          type: integer
+        code:
+          type: string
+        type:
+          type: string
+          enum: [fixed, percentage]
+        rate:
+          type: number
+        usages:
+          type: integer
+          nullable: true
+        allProducts:
+          type: boolean
+        allUsers:
+          type: boolean
+        expiredAt:
+          type: string
+        createdAt:
+          type: string
+      required: [id, code, type, rate]
+
+    PaginatedCoupons:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Coupon"
+        total:
+          type: integer
+        page:
+          type: integer
+        perPage:
+          type: integer
+        totalPages:
+          type: integer
+      required: [data, total, page, perPage, totalPages]
+
+    CreateCouponBody:
+      type: object
+      properties:
+        code:
+          type: string
+        type:
+          type: string
+          enum: [fixed, percentage]
+        rate:
+          type: number
+        usages:
+          type: integer
+          nullable: true
+        allProducts:
+          type: boolean
+        allUsers:
+          type: boolean
+        expiredAt:
+          type: string
+        productIds:
+          type: array
+          items:
+            type: integer
+        userIds:
+          type: array
+          items:
+            type: integer
+      required: [code, type, rate]
+
+    Organization:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        createdAt:
+          type: string
+      required: [id, name]
+
+    PaginatedOrganizations:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Organization"
+        total:
+          type: integer
+        page:
+          type: integer
+        perPage:
+          type: integer
+        totalPages:
+          type: integer
+      required: [data, total, page, perPage, totalPages]
+
+    OrganizationDetail:
+      type: object
+      properties:
+        organization:
+          $ref: "#/components/schemas/Organization"
+        head:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrganizationMember"
+        members:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrganizationMember"
+
+    OrganizationMember:
+      type: object
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        organizationId:
+          type: integer
+        head:
+          type: boolean
+        userName:
+          type: string
+        userEmail:
+          type: string
+      required: [id, userId, organizationId]
+
+    Setting:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        value:
+          type: string
+      required: [name, value]
+
+    UserSetting:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        value:
+          type: string
+      required: [name, value]
+
+    Role:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        permissions:
+          type: array
+          items:
+            type: string
+      required: [id, name]
+
+    Template:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        subject:
+          type: string
+        body:
+          type: string
+        groupId:
+          type: integer
+        active:
+          type: boolean
+        createdAt:
+          type: string
+      required: [id, name]
+
+    UpdateTemplateBody:
+      type: object
+      properties:
+        subject:
+          type: string
+        body:
+          type: string
+        active:
+          type: boolean
+
+    NotificationLog:
+      type: object
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+        recipient:
+          type: string
+        subject:
+          type: string
+        status:
+          type: string
+        createdAt:
+          type: string
+      required: [id, type, recipient]
+
+    PaginatedNotificationLogs:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/NotificationLog"
+        total:
+          type: integer
+        page:
+          type: integer
+        perPage:
+          type: integer
+        totalPages:
+          type: integer
+      required: [data, total, page, perPage, totalPages]
+
+    QueryLog:
+      type: object
+      properties:
+        id:
+          type: integer
+        query:
+          type: string
+        userId:
+          type: integer
+        userName:
+          type: string
+        executionTime:
+          type: number
+        createdAt:
+          type: string
+      required: [id, query]
+
+    PaginatedQueryLogs:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/QueryLog"
+        total:
+          type: integer
+        page:
+          type: integer
+        perPage:
+          type: integer
+        totalPages:
+          type: integer
+      required: [data, total, page, perPage, totalPages]
+
+    UserStat:
+      type: object
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        userName:
+          type: string
+        screenSize:
+          type: string
+        lastLogin:
+          type: string
+        loginCount:
+          type: integer
+      required: [id, userId]
+
+    PaginatedUserStats:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/UserStat"
+        total:
+          type: integer
+        page:
+          type: integer
+        perPage:
+          type: integer
+        totalPages:
+          type: integer
+      required: [data, total, page, perPage, totalPages]
+
+    ExportFile:
+      type: object
+      properties:
+        name:
+          type: string
+        size:
+          type: integer
+        createdAt:
+          type: string
+      required: [name]

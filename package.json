@@ -1,0 +1,29 @@
+{
+  "name": "workspace",
+  "version": "0.0.0",
+  "license": "MIT",
+  "scripts": {
+    "preinstall": "node -e \"const ua=process.env.npm_config_user_agent||'';if(!ua.includes('pnpm'))console.warn('[workspace] Tip: use pnpm install — this monorepo is set up for pnpm workspaces.\\n');\"",
+    "dev": "concurrently -k -n api,web -c cyan,magenta \"npm run dev:api\" \"npm run dev:web\"",
+    "dev:api": "pnpm --filter @workspace/api-server run build && pnpm --filter @workspace/api-server run start",
+    "dev:web": "cross-env PORT=19592 BASE_PATH=/ pnpm --filter @workspace/monitoring run dev",
+    "tm-watch:cron": "pnpm --filter @workspace/api-server run cron:tm-watch",
+    "social-watch:cron": "pnpm --filter @workspace/api-server run cron:scale-serp",
+    "social-watch:cron:force": "cross-env SOCIAL_WATCH_CRON_FORCE=1 pnpm --filter @workspace/api-server run cron:scale-serp",
+    "build": "pnpm run typecheck && pnpm -r --if-present run build",
+    "typecheck:libs": "tsc --build",
+    "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck"
+  },
+  "private": true,
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "cross-env": "^7.0.3",
+    "prettier": "^3.8.1",
+    "typescript": "~5.9.2"
+  },
+  "dependencies": {
+    "@rollup/rollup-win32-x64-msvc": "^4.60.1",
+    "@tailwindcss/oxide-win32-x64-msvc": "^4.2.2",
+    "lightningcss-win32-x64-msvc": "^1.32.0"
+  }
+}
