@@ -204,12 +204,12 @@ async function getPayPalConfig(): Promise<{ base: string; clientId: string; secr
   const isLive = mode === "live";
 
   const clientId = isLive
-    ? ((await getSettingValue("paypal_live_client_id")) || process.env.PAYPAL_LIVE_CLIENT_ID ?? "")
-    : ((await getSettingValue("paypal_sandbox_client_id")) || process.env.PAYPAL_SANDBOX_CLIENT_ID ?? "");
+    ? ((await getSettingValue("paypal_live_client_id")) || (process.env.PAYPAL_LIVE_CLIENT_ID ?? ""))
+    : ((await getSettingValue("paypal_sandbox_client_id")) || (process.env.PAYPAL_SANDBOX_CLIENT_ID ?? ""));
 
   const secret = isLive
-    ? ((await getSettingValue("paypal_live_client_secret")) || process.env.PAYPAL_LIVE_CLIENT_SECRET ?? "")
-    : ((await getSettingValue("paypal_sandbox_client_secret")) || process.env.PAYPAL_SANDBOX_CLIENT_SECRET ?? "");
+    ? ((await getSettingValue("paypal_live_client_secret")) || (process.env.PAYPAL_LIVE_CLIENT_SECRET ?? ""))
+    : ((await getSettingValue("paypal_sandbox_client_secret")) || (process.env.PAYPAL_SANDBOX_CLIENT_SECRET ?? ""));
 
   const base = process.env.PAYPAL_BASE_URL
     ?? (isLive ? "https://api-m.paypal.com" : "https://api-m.sandbox.paypal.com");
