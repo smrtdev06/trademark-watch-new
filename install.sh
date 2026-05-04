@@ -257,6 +257,10 @@ log "API server built"
 su - "$APP_USER" -c "cd ${APP_DIR} && BASE_PATH=/ pnpm --filter @workspace/monitoring run build"
 log "Frontend built"
 
+# Allow Nginx (www-data) to read the built frontend files
+chmod -R o+rX "${APP_DIR}/artifacts/monitoring/dist"
+chmod o+x "${APP_DIR}" "${APP_DIR}/artifacts" "${APP_DIR}/artifacts/monitoring"
+
 # ============================================================
 # 10. Configure Nginx
 # ============================================================
@@ -270,7 +274,7 @@ server {
     listen 80;
     server_name ${SERVER_NAME};
 
-    root ${APP_DIR}/artifacts/monitoring/dist;
+    root ${APP_DIR}/artifacts/monitoring/dist/public;
     index index.html;
 
     location /api/ {

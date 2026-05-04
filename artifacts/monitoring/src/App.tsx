@@ -58,6 +58,8 @@ import ProductsList from "./pages/products";
 import BillingPay from "./pages/billing-pay";
 import SettingsPdf from "./pages/settings-pdf";
 import SettingsEmail from "./pages/settings-email";
+import DebugLatestJournals from "./pages/debug-latest-journals";
+import DebugKeywordTest from "./pages/debug-keyword-test";
 
 const queryClient = new QueryClient();
 
@@ -182,6 +184,8 @@ function AppRouter() {
       <ProtectedRoute path="/reporting/logs" component={AdminCommunicationLogs} adminOnly />
       <ProtectedRoute path="/organizations" component={AdminOrganizations} adminOnly />
       <ProtectedRoute path="/coupon/list" component={AdminCoupons} adminOnly />
+      <ProtectedRoute path="/debug/latest-journals" component={DebugLatestJournals} adminOnly />
+      <ProtectedRoute path="/debug/keyword-test" component={DebugKeywordTest} adminOnly />
 
       <Route>
         <div className="flex items-center justify-center h-screen">

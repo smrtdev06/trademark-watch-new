@@ -83,7 +83,7 @@ export const mainMenu: MenuDef[] = [
     ],
   },
   { type: "link", key: "files", label: "Files", href: "/files" },
-  { type: "link", key: "contacts", label: "Contacts", href: "/user/contacts" },
+  { type: "link", key: "contacts", label: "Clients", href: "/user/contacts" },
 ];
 
 /** All keys in display order, for default permissions (all true) and admin form. */

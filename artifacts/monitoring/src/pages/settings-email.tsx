@@ -1,94 +1,216 @@
+/**
+ * Mirrors PHP livewire/settings/smtp.blade.php
+ * SMTP settings stored in the global `settings` table (not per-user).
+ * Fields: mail_host, mail_port, mail_encryption, mail_user_name, mail_password,
+ *         from_address, from_name
+ */
 import { useState, useEffect } from "react";
 import { Layout } from "@/components/layout";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2 } from "lucide-react";
+import { Loader2, Eye, EyeOff } from "lucide-react";
+
+interface SmtpForm {
+  mail_host: string;
+  mail_port: string;
+  mail_encryption: string;
+  mail_user_name: string;
+  mail_password: string;
+  from_address: string;
+  from_name: string;
+}
+
+const DEFAULTS: SmtpForm = {
+  mail_host: "",
+  mail_port: "587",
+  mail_encryption: "tls",
+  mail_user_name: "",
+  mail_password: "",
+  from_address: "",
+  from_name: "",
+};
+
+function PasswordInput({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
+  const [show, setShow] = useState(false);
+  return (
+    <div className="relative">
+      <input
+        type={show ? "text" : "password"}
+        autoComplete="new-password"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="border rounded px-3 py-2 text-sm w-full pr-10"
+      />
+      <button
+        type="button"
+        onClick={() => setShow((s) => !s)}
+        className="absolute inset-y-0 right-2 flex items-center text-gray-400 hover:text-gray-600"
+      >
+        {show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+      </button>
+    </div>
+  );
+}
 
 export default function SettingsEmail() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({
-    smtpHost: "", smtpPort: "587", encryption: "tls", fromEmail: "", fromName: "",
-  });
+  const [form, setForm] = useState<SmtpForm>(DEFAULTS);
+
+  const baseUrl = import.meta.env.VITE_API_URL || "/api";
+  const token = () => localStorage.getItem("token");
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    const baseUrl = import.meta.env.VITE_API_URL || `${window.location.origin}/api`;
-    fetch(`${baseUrl}/settings/user-settings`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.json())
-      .then((settings: any[]) => {
-        const vals: Record<string, string> = {};
-        if (Array.isArray(settings)) settings.forEach((s: any) => { vals[s.name] = s.value || ""; });
-        setForm(prev => ({
-          smtpHost: vals.smtpHost || prev.smtpHost,
-          smtpPort: vals.smtpPort || prev.smtpPort,
-          encryption: vals.encryption || prev.encryption,
-          fromEmail: vals.fromEmail || prev.fromEmail,
-          fromName: vals.fromName || prev.fromName,
-        }));
+    fetch(`${baseUrl}/settings/smtp`, {
+      headers: { Authorization: `Bearer ${token()}` },
+    })
+      .then((r) => r.json())
+      .then((data: Partial<SmtpForm>) => {
+        setForm((prev) => ({ ...prev, ...data }));
       })
+      .catch(() => { /* use defaults */ })
       .finally(() => setLoading(false));
   }, []);
+
+  const setField = (key: keyof SmtpForm, value: string) =>
+    setForm((prev) => ({ ...prev, [key]: value }));
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      const token = localStorage.getItem("token");
-      const baseUrl = import.meta.env.VITE_API_URL || `${window.location.origin}/api`;
-      const items = Object.entries(form).map(([name, value]) => ({ name, value }));
-      const resp = await fetch(`${baseUrl}/settings/user-settings`, {
+      const resp = await fetch(`${baseUrl}/settings/smtp`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify(items),
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token()}` },
+        body: JSON.stringify(form),
       });
-      if (resp.ok) toast({ title: "Email settings saved" });
-      else toast({ title: "Failed to save", variant: "destructive" });
+      if (resp.ok) {
+        toast({ title: "SMTP settings saved" });
+      } else {
+        toast({ title: "Failed to save settings", variant: "destructive" });
+      }
     } catch {
-      toast({ title: "Failed to save", variant: "destructive" });
+      toast({ title: "Network error", variant: "destructive" });
     } finally {
       setSaving(false);
     }
   };
 
-  const setField = (key: string, value: string) => setForm(prev => ({ ...prev, [key]: value }));
-
-  if (loading) return <Layout><div className="flex justify-center p-8"><Loader2 className="w-6 h-6 animate-spin" /></div></Layout>;
+  if (loading) {
+    return (
+      <Layout>
+        <div className="flex justify-center p-8"><Loader2 className="w-6 h-6 animate-spin" /></div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>
       <div className="mb-4"><h4 className="text-xl font-semibold">Email Settings</h4></div>
-      <div className="bg-white rounded shadow-sm border p-6">
-        <p className="text-sm text-gray-500 mb-4">Configure email notification settings.</p>
-        <div className="space-y-4 max-w-lg">
+
+      <div className="bg-white rounded shadow-sm border">
+        {/* Tab header — mirrors PHP settings.blade.php tab layout */}
+        <div className="border-b px-6 pt-4">
+          <div className="flex gap-4">
+            <span className="text-sm font-medium border-b-2 border-blue-600 pb-3 text-blue-600">SMTP Settings</span>
+          </div>
+        </div>
+
+        <div className="p-6 max-w-lg space-y-5">
+          {/* Host */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">SMTP Host</label>
-            <input type="text" className="border rounded px-3 py-2 text-sm w-full" placeholder="smtp.example.com" value={form.smtpHost} onChange={(e) => setField("smtpHost", e.target.value)} />
+            <label className="block text-sm font-medium text-gray-700 mb-1">Host</label>
+            <input
+              type="text"
+              value={form.mail_host}
+              onChange={(e) => setField("mail_host", e.target.value)}
+              placeholder="smtp.example.com"
+              className="border rounded px-3 py-2 text-sm w-full"
+            />
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">SMTP Port</label>
-              <input type="number" className="border rounded px-3 py-2 text-sm w-full" value={form.smtpPort} onChange={(e) => setField("smtpPort", e.target.value)} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Encryption</label>
-              <select className="border rounded px-3 py-2 text-sm w-full" value={form.encryption} onChange={(e) => setField("encryption", e.target.value)}>
-                <option value="tls">TLS</option>
-                <option value="ssl">SSL</option>
-                <option value="none">None</option>
-              </select>
-            </div>
-          </div>
+
+          {/* User Name */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">From Email</label>
-            <input type="email" className="border rounded px-3 py-2 text-sm w-full" placeholder="noreply@example.com" value={form.fromEmail} onChange={(e) => setField("fromEmail", e.target.value)} />
+            <label className="block text-sm font-medium text-gray-700 mb-1">User Name</label>
+            <input
+              type="text"
+              autoComplete="off"
+              value={form.mail_user_name}
+              onChange={(e) => setField("mail_user_name", e.target.value)}
+              placeholder="Mail User Name"
+              className="border rounded px-3 py-2 text-sm w-full"
+            />
           </div>
+
+          {/* Password */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+            <PasswordInput
+              value={form.mail_password}
+              onChange={(v) => setField("mail_password", v)}
+              placeholder="Mail Password"
+            />
+          </div>
+
+          {/* Port */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Port</label>
+            <input
+              type="text"
+              value={form.mail_port}
+              onChange={(e) => setField("mail_port", e.target.value)}
+              placeholder="587"
+              className="border rounded px-3 py-2 text-sm w-full"
+            />
+          </div>
+
+          {/* Encryption */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Encryption</label>
+            <select
+              value={form.mail_encryption}
+              onChange={(e) => setField("mail_encryption", e.target.value)}
+              className="border rounded px-3 py-2 text-sm w-full"
+            >
+              <option value="tls">TLS</option>
+              <option value="ssl">SSL</option>
+              <option value="none">None</option>
+            </select>
+          </div>
+
+          {/* From Address */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">From Address</label>
+            <input
+              type="email"
+              value={form.from_address}
+              onChange={(e) => setField("from_address", e.target.value)}
+              placeholder="noreply@example.com"
+              className="border rounded px-3 py-2 text-sm w-full"
+            />
+          </div>
+
+          {/* From Name */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">From Name</label>
-            <input type="text" className="border rounded px-3 py-2 text-sm w-full" placeholder="TMPilot WTW" value={form.fromName} onChange={(e) => setField("fromName", e.target.value)} />
+            <input
+              type="text"
+              value={form.from_name}
+              onChange={(e) => setField("from_name", e.target.value)}
+              placeholder="TM Monitor"
+              className="border rounded px-3 py-2 text-sm w-full"
+            />
           </div>
-          <button onClick={handleSave} disabled={saving} className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 disabled:opacity-50">
-            {saving ? "Saving..." : "Save Email Settings"}
-          </button>
+
+          <div className="flex justify-end pt-2">
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="bg-green-600 text-white px-5 py-2 rounded text-sm hover:bg-green-700 disabled:opacity-50"
+            >
+              {saving ? "Saving…" : "Save"}
+            </button>
+          </div>
         </div>
       </div>
     </Layout>

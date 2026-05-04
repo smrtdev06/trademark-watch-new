@@ -117,6 +117,8 @@ export function Layout({ children }: { children: ReactNode }) {
       { key: "admin.roles", label: "Roles & Permissions", href: "/settings/roles" },
       { key: "admin.tm_settings", label: "Monitoring Settings", href: "/tm-watch/settings" },
       { key: "admin.comm_logs", label: "Communication Logs", href: "/reporting/logs" },
+      { key: "admin.latest_journals", label: "Latest Journals", href: "/debug/latest-journals" },
+      { key: "admin.keyword_test", label: "Keyword Test", href: "/debug/keyword-test" },
     ],
   };
 

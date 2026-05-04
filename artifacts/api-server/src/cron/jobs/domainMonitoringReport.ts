@@ -1,13 +1,44 @@
+/**
+ * Mirrors PHP app/Console/Commands/DomainMonitoringReport.php
+ * Sends today's domain monitoring results to each user.
+ * Uses template group_id = 6 (ACTION_NEW_DOMAIN_MONITORING).
+ */
+
 import { db, rawQuery } from "@workspace/db";
 import { domainsTable, usersTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 import { logger } from "../../lib/logger";
 import { localCalendarYmd } from "../../lib/domainMonitoringDates";
+import { sendMail, sendErrorMail, getEmailTemplate, renderTemplate } from "../../lib/mailer";
 
-/**
- * PHP `domain:monitoring:report` — email per user for today's results ({@link new-monitoring/app/Console/Commands/DomainMonitoringReport.php}).
- * Email/templates are not ported; we log payloads only.
- */
+const GROUP_ID = 6; // ACTION_NEW_DOMAIN_MONITORING
+
+function defaultHtml(user: { name: string }, results: any[]): string {
+  const rows = results.map((r) => `
+    <tr>
+      <td style="padding:6px 10px;border-bottom:1px solid #eee">${r.sourceDomain ?? ""}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid #eee">${r.result ?? ""}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid #eee">${r.sourceSearchType ?? ""}</td>
+    </tr>`).join("");
+
+  return `<div style="font-family:sans-serif;max-width:800px;margin:auto">
+    <h2>Domain Monitoring Report</h2>
+    <p>Dear ${user.name},</p>
+    <p>You have <strong>${results.length}</strong> new domain monitoring result(s) today.</p>
+    <table style="border-collapse:collapse;width:100%">
+      <thead>
+        <tr style="background:#f5f5f5">
+          <th style="padding:8px 10px;text-align:left">Domain</th>
+          <th style="padding:8px 10px;text-align:left">Result</th>
+          <th style="padding:8px 10px;text-align:left">Search Type</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <p style="color:#888;font-size:12px;margin-top:20px">This is an automated report from the TM Monitoring Platform.</p>
+  </div>`;
+}
+
 export async function domainMonitoringReport() {
   const unprocessed = await db.select().from(domainsTable)
     .where(eq(domainsTable.status, 0))
@@ -15,12 +46,19 @@ export async function domainMonitoringReport() {
 
   if (unprocessed.length > 0) {
     logger.warn("Domain monitoring report skipped: there are still unprocessed entries");
+    // Mirrors PHP: send error mail to admin
+    await sendErrorMail(
+      process.env.ADMIN_EMAIL ?? "",
+      "Domain monitoring report",
+      "Did not send because there are still unprocessed entries. Need to send it MANUALLY"
+    );
     return;
   }
 
-  /** PHP `Carbon::now()->format('Y-m-d')` for `whereDate('created_at', ...)` — use local calendar day, not UTC */
   const today = localCalendarYmd(new Date());
   const users = await db.select().from(usersTable);
+
+  const template = await getEmailTemplate(GROUP_ID);
 
   for (const user of users) {
     const results = await rawQuery(sql`
@@ -34,10 +72,13 @@ export async function domainMonitoringReport() {
 
     if (!results.length) continue;
 
-    logger.info({
-      userId: user.id,
-      email: user.email,
-      resultCount: results.length,
-    }, "Domain monitoring report ready for user (email sending not configured)");
+    const subject = template ? renderTemplate(template.subject, { user, records: results }) : "Domain Monitoring Report";
+    const html = template
+      ? renderTemplate(template.body, { user, records: results, count: results.length })
+      : defaultHtml(user, results);
+
+    await sendMail({ to: user.email, subject, html, userId: user.id });
+
+    logger.info({ userId: user.id, email: user.email, resultCount: results.length }, "Domain monitoring report sent");
   }
 }

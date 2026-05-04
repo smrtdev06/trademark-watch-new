@@ -1,7 +1,8 @@
 import { Router, type IRouter } from "express";
 import { eq, sql, count, desc } from "drizzle-orm";
-import { db, rawQuery, settingsTable, rolesTable, userSettingsTable, templatesTable, notificationLogsTable, queryLogsTable, userStatsTable, usersTable } from "@workspace/db";
+import { db, rawQuery, settingsTable, rolesTable, userSettingsTable, templatesTable, notificationLogsTable, queryLogsTable, userStatsTable, usersTable, monitoringLatestTable } from "@workspace/db";
 import { requireAuth, requireAdmin, parseId } from "../lib/auth";
+import { monitoringGraphQlHeaders } from "../lib/graphqlMonitoringAuth";
 
 const router: IRouter = Router();
 
@@ -202,6 +203,97 @@ router.get("/files", requireAuth, async (_req, res): Promise<void> => {
 
 router.get("/files/:filename", requireAuth, async (req, res): Promise<void> => {
   res.status(404).json({ status: 404, message: "File not found" });
+});
+
+// ---------------------------------------------------------------------------
+// SMTP / email settings (admin only) — mirrors PHP WMNotification + smtp.blade.php
+// ---------------------------------------------------------------------------
+
+const SMTP_SETTINGS = [
+  "mail_host",
+  "mail_port",
+  "mail_encryption",
+  "mail_user_name",
+  "mail_password",
+  "from_address",
+  "from_name",
+];
+
+const SMTP_ENV_FALLBACKS: Record<string, string> = {
+  mail_host: "MAIL_HOST",
+  mail_port: "MAIL_PORT",
+  mail_encryption: "MAIL_ENCRYPTION",
+  mail_user_name: "MAIL_USERNAME",
+  mail_password: "MAIL_PASSWORD",
+  from_address: "MAIL_FROM_ADDRESS",
+  from_name: "MAIL_FROM_NAME",
+};
+
+router.get("/settings/smtp", requireAuth, requireAdmin, async (_req, res): Promise<void> => {
+  const result: Record<string, string> = {};
+  for (const name of SMTP_SETTINGS) {
+    const [row] = await db.select().from(settingsTable).where(eq(settingsTable.name, name));
+    const dbVal = row?.value?.trim() ?? "";
+    const envVal = process.env[SMTP_ENV_FALLBACKS[name]] ?? "";
+    const raw = dbVal || envVal;
+    result[name] = name === "mail_password" && raw ? "••••••••" : raw;
+  }
+  res.json(result);
+});
+
+router.put("/settings/smtp", requireAuth, requireAdmin, async (req, res): Promise<void> => {
+  const body = req.body as Record<string, string>;
+  for (const name of SMTP_SETTINGS) {
+    const value = body[name];
+    if (value === undefined) continue;
+    if (/^[•]+$/.test(value.trim())) continue; // skip masked unchanged secrets
+    const [existing] = await db.select().from(settingsTable).where(eq(settingsTable.name, name));
+    if (existing) {
+      await db.update(settingsTable).set({ value }).where(eq(settingsTable.id, existing.id));
+    } else {
+      await db.insert(settingsTable).values({ name, value });
+    }
+  }
+  res.json({ status: 200, message: "SMTP settings updated" });
+});
+
+// ---------------------------------------------------------------------------
+// Debug routes (admin only) — mirrors PHP TestController
+// ---------------------------------------------------------------------------
+
+router.get("/debug/latest-journals", requireAuth, requireAdmin, async (_req, res): Promise<void> => {
+  const rows = await db.select().from(monitoringLatestTable).orderBy(desc(monitoringLatestTable.journalDate));
+  res.json(rows);
+});
+
+router.post("/debug/keyword-test", requireAuth, requireAdmin, async (req, res): Promise<void> => {
+  const { keyword, countryCode, date } = req.body;
+  const GRAPHQL_URL = process.env.GRAPHQL_MONITORING_URL ?? "https://trans.rasr.in/graphql";
+
+  const query = `
+    query ApplicationsQuery($keyword: String!, $countryCode: String, $journalDate: String, $offset: Int, $limit: Int) {
+      applications: phoneticSearch(keyword: $keyword, countryCode: $countryCode, journalDate: $journalDate, offset: $offset, limit: $limit) {
+        appId tmname translation transliteration date journalDate creationDate
+        image compNameAndAddress reprName countryCode appClass
+      }
+    }
+  `;
+
+  try {
+    const resp = await fetch(GRAPHQL_URL, {
+      method: "POST",
+      headers: monitoringGraphQlHeaders(),
+      body: JSON.stringify({ query, variables: { keyword, countryCode: countryCode || null, journalDate: date || null, offset: 0, limit: 500 } }),
+    });
+    const data = await resp.json() as any;
+    if (data?.errors) {
+      res.status(502).json({ status: 0, message: data.errors[0]?.message ?? "GraphQL error" });
+      return;
+    }
+    res.json({ status: 1, data: data?.data?.applications ?? [] });
+  } catch (err: any) {
+    res.status(502).json({ status: 0, message: err.message });
+  }
 });
 
 export default router;

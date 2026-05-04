@@ -113,6 +113,16 @@ LOG_LEVEL=info
 
 # Optional: ScaleSerp API key (for social watch feature)
 # SCALE_SERP_API_KEY=your_key_here
+
+# Optional: SMTP fallback (can also be set in Admin → Email Settings)
+# MAIL_HOST=smtp.example.com
+# MAIL_PORT=587
+# MAIL_ENCRYPTION=tls
+# MAIL_USERNAME=your@email.com
+# MAIL_PASSWORD=yourpassword
+# MAIL_FROM_ADDRESS=noreply@example.com
+# MAIL_FROM_NAME=TM Monitor
+# ADMIN_EMAIL=admin@example.com
 EOF
 ```
 
