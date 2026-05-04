@@ -229,14 +229,25 @@ const SMTP_ENV_FALLBACKS: Record<string, string> = {
   from_name: "MAIL_FROM_NAME",
 };
 
+/** PHP .env files use "null" as a placeholder — treat it as empty */
+function envSafe(val: string | undefined): string {
+  if (!val || val.trim() === "null") return "";
+  return val.trim();
+}
+
 router.get("/settings/smtp", requireAuth, requireAdmin, async (_req, res): Promise<void> => {
   const result: Record<string, string> = {};
   for (const name of SMTP_SETTINGS) {
     const [row] = await db.select().from(settingsTable).where(eq(settingsTable.name, name));
     const dbVal = row?.value?.trim() ?? "";
-    const envVal = process.env[SMTP_ENV_FALLBACKS[name]] ?? "";
+    const envVal = envSafe(process.env[SMTP_ENV_FALLBACKS[name]]);
     const raw = dbVal || envVal;
-    result[name] = name === "mail_password" && raw ? "••••••••" : raw;
+    // Mask password but return a flag so the frontend knows it's set
+    if (name === "mail_password") {
+      result[name] = raw ? "••••••••" : "";
+    } else {
+      result[name] = raw;
+    }
   }
   res.json(result);
 });
@@ -246,7 +257,7 @@ router.put("/settings/smtp", requireAuth, requireAdmin, async (req, res): Promis
   for (const name of SMTP_SETTINGS) {
     const value = body[name];
     if (value === undefined) continue;
-    if (/^[•]+$/.test(value.trim())) continue; // skip masked unchanged secrets
+    if (/^[•]+$/.test(value.trim())) continue; // skip masked unchanged password
     const [existing] = await db.select().from(settingsTable).where(eq(settingsTable.name, name));
     if (existing) {
       await db.update(settingsTable).set({ value }).where(eq(settingsTable.id, existing.id));
@@ -255,6 +266,64 @@ router.put("/settings/smtp", requireAuth, requireAdmin, async (req, res): Promis
     }
   }
   res.json({ status: 200, message: "SMTP settings updated" });
+});
+
+router.post("/settings/smtp/test", requireAuth, requireAdmin, async (req, res): Promise<void> => {
+  const { to } = req.body as { to?: string };
+  const recipient = to?.trim() || req.user!.email;
+
+  // Resolve current SMTP config (same logic as lib/mailer.ts getSetting)
+  async function resolve(name: string, envKey: string): Promise<string> {
+    const [row] = await db.select().from(settingsTable).where(eq(settingsTable.name, name));
+    const dbVal = row?.value?.trim() ?? "";
+    return dbVal || envSafe(process.env[envKey]);
+  }
+
+  const host       = await resolve("mail_host",       "MAIL_HOST");
+  const portStr    = await resolve("mail_port",       "MAIL_PORT");
+  const encryption = await resolve("mail_encryption", "MAIL_ENCRYPTION");
+  const user       = await resolve("mail_user_name",  "MAIL_USERNAME");
+  const pass       = await resolve("mail_password",   "MAIL_PASSWORD");
+  const from       = await resolve("from_address",    "MAIL_FROM_ADDRESS");
+  const fromName   = await resolve("from_name",       "MAIL_FROM_NAME");
+
+  if (!host) {
+    res.status(400).json({ status: 0, message: "SMTP host is not configured. Please fill in the settings above and save first." });
+    return;
+  }
+
+  try {
+    const nodemailer = await import("nodemailer");
+    const port = parseInt(portStr || "587");
+    const secure = encryption === "ssl";
+
+    const transporter = nodemailer.default.createTransport({
+      host,
+      port,
+      secure,
+      ...(user && pass ? { auth: { user, pass } } : {}),
+      tls: { rejectUnauthorized: false },
+    });
+
+    await transporter.verify();
+
+    await transporter.sendMail({
+      from: fromName ? `"${fromName}" <${from}>` : from,
+      to: recipient,
+      subject: "Test Email — TM Monitor SMTP",
+      html: `<div style="font-family:sans-serif;max-width:500px;margin:auto">
+        <h2>Test Email</h2>
+        <p>This is a test email sent from the TM Monitor platform.</p>
+        <p>If you received this, your SMTP settings are working correctly.</p>
+        <hr/>
+        <p style="color:#888;font-size:12px">Sent via: ${host}:${port} (${encryption || "none"})</p>
+      </div>`,
+    });
+
+    res.json({ status: 1, message: `Test email sent to ${recipient}` });
+  } catch (err: any) {
+    res.status(502).json({ status: 0, message: err.message ?? "Failed to send test email" });
+  }
 });
 
 // ---------------------------------------------------------------------------
