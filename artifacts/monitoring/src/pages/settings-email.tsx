@@ -107,7 +107,10 @@ export default function SettingsEmail() {
         toast({ title: "SMTP settings saved" });
         // Re-fetch to refresh masked password state
         const fresh = await fetch(`${baseUrl}/settings/smtp`, { headers: { Authorization: `Bearer ${token()}` } });
-        if (fresh.ok) setForm((prev) => ({ ...prev, ...(await fresh.json()) }));
+        if (fresh.ok) {
+          const freshData = await fresh.json();
+          setForm((prev) => ({ ...prev, ...freshData }));
+        }
       } else {
         toast({ title: "Failed to save settings", variant: "destructive" });
       }
