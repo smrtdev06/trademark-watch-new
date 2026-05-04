@@ -5,6 +5,11 @@ set -euo pipefail
 # Trademark Monitoring Platform - Build & Restart Script
 # Use this for updates after the initial install.sh was run.
 # Run as root or with sudo: sudo bash install-update.sh
+#
+# Supports two layouts:
+#   A) Source and app dir are the same  (/opt/monitoring)
+#   B) Source is in a different location (/root/trademark-watch-new)
+#      while Nginx/PM2 serve from /opt/monitoring
 # ============================================================
 
 RED='\033[0;31m'
@@ -27,37 +32,83 @@ fi
 # Config
 # ============================================================
 
-APP_DIR="/opt/monitoring"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SOURCE_DIR="$SCRIPT_DIR"          # where the git repo / source code lives
+APP_DIR="/opt/monitoring"         # where Nginx + PM2 serve from
 APP_USER="monitoring"
 
-read -rp "Application directory [${APP_DIR}]: " input
+echo ""
+echo -e "${BLUE}========================================${NC}"
+echo -e "${BLUE} TM Monitor — Build & Restart${NC}"
+echo -e "${BLUE}========================================${NC}"
+echo ""
+
+read -rp "Source directory (git repo location) [${SOURCE_DIR}]: " input
+SOURCE_DIR="${input:-$SOURCE_DIR}"
+
+read -rp "App/deploy directory (Nginx root, PM2 cwd) [${APP_DIR}]: " input
 APP_DIR="${input:-$APP_DIR}"
 
-read -rp "Application user [${APP_USER}]: " input
+read -rp "Application user (runs PM2) [${APP_USER}]: " input
 APP_USER="${input:-$APP_USER}"
 
+# Validate
 if [ ! -f "${APP_DIR}/.env" ]; then
-  err ".env not found at ${APP_DIR}/.env — run install.sh first."
+  err ".env not found at ${APP_DIR}/.env — is this the right app directory?"
+  err "If you haven't run install.sh yet, do that first."
   exit 1
 fi
 
-log "Using app dir: ${APP_DIR}"
-log "Using app user: ${APP_USER}"
+if [ ! -f "${SOURCE_DIR}/package.json" ]; then
+  err "package.json not found in source dir: ${SOURCE_DIR}"
+  exit 1
+fi
+
+log "Source dir : ${SOURCE_DIR}"
+log "App dir    : ${APP_DIR}"
+log "App user   : ${APP_USER}"
+
+SAME_DIR=false
+if [ "$SOURCE_DIR" = "$APP_DIR" ]; then
+  SAME_DIR=true
+  log "Source and app dir are the same — no sync needed"
+fi
 
 # ============================================================
-# 1. Build API server
+# 1. Sync source files to app dir (if different)
 # ============================================================
 
-step "1/3 - Building API server"
+if [ "$SAME_DIR" = false ]; then
+  step "1/4 - Syncing source files to app dir"
+
+  rsync -a \
+    --exclude='node_modules' \
+    --exclude='.git' \
+    --exclude='artifacts/api-server/dist' \
+    --exclude='artifacts/monitoring/dist' \
+    --exclude='.env' \
+    "${SOURCE_DIR}/" "${APP_DIR}/"
+
+  chown -R "${APP_USER}:${APP_USER}" "${APP_DIR}"
+  log "Files synced to ${APP_DIR}"
+else
+  step "1/4 - Skipping sync (same directory)"
+fi
+
+# ============================================================
+# 2. Build API server
+# ============================================================
+
+step "2/4 - Building API server"
 
 su - "$APP_USER" -c "cd ${APP_DIR} && set -a && source .env && set +a && pnpm --filter @workspace/api-server run build"
 log "API server built"
 
 # ============================================================
-# 2. Build frontend
+# 3. Build frontend
 # ============================================================
 
-step "2/3 - Building frontend"
+step "3/4 - Building frontend"
 
 su - "$APP_USER" -c "cd ${APP_DIR} && BASE_PATH=/ pnpm --filter @workspace/monitoring run build"
 log "Frontend built"
@@ -65,16 +116,14 @@ log "Frontend built"
 # Fix permissions so Nginx (www-data) can read the output
 chmod -R o+rX "${APP_DIR}/artifacts/monitoring/dist"
 chmod o+x "${APP_DIR}" "${APP_DIR}/artifacts" "${APP_DIR}/artifacts/monitoring"
-
 log "Permissions fixed"
 
 # ============================================================
-# 3. Restart services
+# 4. Restart services
 # ============================================================
 
-step "3/3 - Restarting services"
+step "4/4 - Restarting services"
 
-# Restart API via PM2
 if su - "$APP_USER" -c "pm2 list" 2>/dev/null | grep -q "monitoring-api"; then
   su - "$APP_USER" -c "pm2 restart monitoring-api"
   log "PM2 process restarted"
@@ -85,12 +134,11 @@ else
     su - "$APP_USER" -c "pm2 save"
     log "PM2 process started"
   else
-    err "ecosystem.config.cjs not found — run install.sh first."
+    err "ecosystem.config.cjs not found at ${APP_DIR} — run install.sh first."
     exit 1
   fi
 fi
 
-# Reload Nginx to pick up any new static assets
 if systemctl is-active --quiet nginx; then
   systemctl reload nginx
   log "Nginx reloaded"
