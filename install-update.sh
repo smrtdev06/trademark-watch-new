@@ -96,10 +96,19 @@ else
 fi
 
 # ============================================================
-# 2. Build API server
+# 2. Install dependencies
 # ============================================================
 
-step "2/4 - Building API server"
+step "2/4 - Installing dependencies"
+
+su - "$APP_USER" -c "cd ${APP_DIR} && pnpm install --frozen-lockfile 2>/dev/null || pnpm install"
+log "Dependencies installed"
+
+# ============================================================
+# 3. Build API server (renumbered)
+# ============================================================
+
+step "3/5 - Building API server"
 
 su - "$APP_USER" -c "cd ${APP_DIR} && set -a && source .env && set +a && pnpm --filter @workspace/api-server run build"
 log "API server built"
@@ -108,7 +117,7 @@ log "API server built"
 # 3. Build frontend
 # ============================================================
 
-step "3/4 - Building frontend"
+step "4/5 - Building frontend"
 
 su - "$APP_USER" -c "cd ${APP_DIR} && BASE_PATH=/ pnpm --filter @workspace/monitoring run build"
 log "Frontend built"
@@ -122,7 +131,7 @@ log "Permissions fixed"
 # 4. Restart services
 # ============================================================
 
-step "4/4 - Restarting services"
+step "5/5 - Restarting services"
 
 if su - "$APP_USER" -c "pm2 list" 2>/dev/null | grep -q "monitoring-api"; then
   su - "$APP_USER" -c "pm2 restart monitoring-api"
