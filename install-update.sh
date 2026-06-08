@@ -9,7 +9,7 @@ set -euo pipefail
 # Supports two layouts:
 #   A) Source and app dir are the same  (/opt/monitoring)
 #   B) Source is in a different location (/root/trademark-watch-new)
-#      while Nginx/PM2 serve from /opt/monitoring
+#      while PM2 serves from /opt/monitoring (no Nginx)
 # ============================================================
 
 RED='\033[0;31m'
@@ -46,7 +46,7 @@ echo ""
 read -rp "Source directory (git repo location) [${SOURCE_DIR}]: " input
 SOURCE_DIR="${input:-$SOURCE_DIR}"
 
-read -rp "App/deploy directory (Nginx root, PM2 cwd) [${APP_DIR}]: " input
+read -rp "App/deploy directory (PM2 cwd) [${APP_DIR}]: " input
 APP_DIR="${input:-$APP_DIR}"
 
 read -rp "Application user (runs PM2) [${APP_USER}]: " input
@@ -122,10 +122,9 @@ step "4/5 - Building frontend"
 su - "$APP_USER" -c "cd ${APP_DIR} && BASE_PATH=/ pnpm --filter @workspace/monitoring run build"
 log "Frontend built"
 
-# Fix permissions so Nginx (www-data) can read the output
-chmod -R o+rX "${APP_DIR}/artifacts/monitoring/dist"
-chmod o+x "${APP_DIR}" "${APP_DIR}/artifacts" "${APP_DIR}/artifacts/monitoring"
-log "Permissions fixed"
+# Fix permissions on built frontend
+chmod -R o+rX "${APP_DIR}/artifacts/monitoring/dist" 2>/dev/null || true
+log "Build complete"
 
 # ============================================================
 # 4. Restart services
@@ -134,26 +133,27 @@ log "Permissions fixed"
 step "5/5 - Restarting services"
 
 if su - "$APP_USER" -c "pm2 list" 2>/dev/null | grep -q "monitoring-api"; then
-  su - "$APP_USER" -c "pm2 restart monitoring-api"
-  log "PM2 process restarted"
+  su - "$APP_USER" -c "pm2 restart monitoring-api monitoring-web 2>/dev/null || pm2 restart monitoring-api"
+  log "PM2 processes restarted"
 else
-  warn "monitoring-api not found in PM2 — starting it now"
+  warn "PM2 apps not found — starting from ecosystem.config.cjs"
   if [ -f "${APP_DIR}/ecosystem.config.cjs" ]; then
     su - "$APP_USER" -c "pm2 start ${APP_DIR}/ecosystem.config.cjs"
     su - "$APP_USER" -c "pm2 save"
-    log "PM2 process started"
+    log "PM2 processes started"
   else
     err "ecosystem.config.cjs not found at ${APP_DIR} — run install.sh first."
     exit 1
   fi
 fi
 
-if systemctl is-active --quiet nginx; then
-  systemctl reload nginx
-  log "Nginx reloaded"
-else
-  warn "Nginx is not running"
-fi
+# Read ports from .env for health checks
+set -a
+# shellcheck source=/dev/null
+source "${APP_DIR}/.env"
+set +a
+API_PORT="${PORT:-5002}"
+WEB_PORT="${WEB_PORT:-5173}"
 
 # ============================================================
 # Verify
@@ -161,28 +161,29 @@ fi
 
 sleep 2
 
-API_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/api/health 2>/dev/null || echo "000")
-NGINX_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost 2>/dev/null || echo "000")
+API_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:${API_PORT}/api/health" 2>/dev/null || echo "000")
+WEB_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:${WEB_PORT}/" 2>/dev/null || echo "000")
 
 echo ""
 if [ "$API_STATUS" = "200" ]; then
-  log "API server:  OK (HTTP ${API_STATUS})"
+  log "API server:  OK (HTTP ${API_STATUS} on port ${API_PORT})"
 else
   warn "API server:  HTTP ${API_STATUS} — check: pm2 logs monitoring-api"
 fi
 
-if [ "$NGINX_STATUS" = "200" ]; then
-  log "Nginx:       OK (HTTP ${NGINX_STATUS})"
+if [ "$WEB_STATUS" = "200" ]; then
+  log "Web UI:      OK (HTTP ${WEB_STATUS} on port ${WEB_PORT})"
 else
-  warn "Nginx:       HTTP ${NGINX_STATUS} — check: sudo nginx -t"
+  warn "Web UI:      HTTP ${WEB_STATUS} — check: pm2 logs monitoring-web"
 fi
 
 echo ""
 log "Update complete!"
 echo ""
 echo -e "${GREEN}Useful commands:${NC}"
-echo "  pm2 status                  # Check API status"
-echo "  pm2 logs monitoring-api     # View API logs"
-echo "  pm2 restart monitoring-api  # Restart API manually"
-echo "  sudo systemctl reload nginx # Reload Nginx manually"
+echo "  pm2 status                  # Check API + web"
+echo "  pm2 logs monitoring-api     # API logs"
+echo "  pm2 logs monitoring-web     # Web logs"
+echo "  pm2 restart all             # Restart both"
+echo "  cd ${APP_DIR} && npm run dev"
 echo ""

@@ -33,9 +33,11 @@ DB_NAME="monitoring_db"
 DB_USER="monitoring_user"
 DB_PASS=""
 SESSION_SECRET=""
-DOMAIN=""
+API_PORT="5002"
+WEB_PORT="5173"
 NODE_VERSION="20"
-ENABLE_SSL="no"
+
+FORBIDDEN_PORTS="80 8080 5000"
 
 # ============================================================
 # Interactive setup
@@ -64,11 +66,21 @@ while [ -z "$DB_PASS" ]; do
   fi
 done
 
-read -rp "Domain name (leave empty for IP-only access): " DOMAIN
+read -rp "API port [${API_PORT}] (must not be 80, 8080, or 5000): " input
+API_PORT="${input:-$API_PORT}"
+read -rp "Web UI port [${WEB_PORT}] (must not be 80, 8080, or 5000): " input
+WEB_PORT="${input:-$WEB_PORT}"
 
-if [ -n "$DOMAIN" ]; then
-  read -rp "Enable SSL with Let's Encrypt? (yes/no) [no]: " ENABLE_SSL
-  ENABLE_SSL="${ENABLE_SSL:-no}"
+for p in $FORBIDDEN_PORTS; do
+  if [ "$API_PORT" = "$p" ] || [ "$WEB_PORT" = "$p" ]; then
+    err "Ports 80, 8080, and 5000 are not allowed. Choose other ports."
+    exit 1
+  fi
+done
+
+if [ "$API_PORT" = "$WEB_PORT" ]; then
+  err "API port and web port must be different"
+  exit 1
 fi
 
 SESSION_SECRET=$(openssl rand -hex 32)
@@ -79,8 +91,9 @@ echo "  App directory:   ${APP_DIR}"
 echo "  App user:        ${APP_USER}"
 echo "  Database:        ${DB_NAME}"
 echo "  DB user:         ${DB_USER}"
-echo "  Domain:          ${DOMAIN:-<none, IP access>}"
-echo "  SSL:             ${ENABLE_SSL}"
+echo "  API port:        ${API_PORT}"
+echo "  Web UI port:     ${WEB_PORT}"
+echo "  Reverse proxy:   none (PM2 + Vite preview only)"
 echo ""
 read -rp "Continue with installation? (yes/no): " confirm
 if [ "$confirm" != "yes" ]; then
@@ -97,7 +110,6 @@ step "1/10 - Updating system packages"
 apt update && apt upgrade -y
 apt install -y \
   curl wget git build-essential \
-  nginx certbot python3-certbot-nginx \
   postgresql postgresql-contrib \
   lsof ufw
 
@@ -214,7 +226,9 @@ DATABASE_URL="postgresql://${DB_USER}:${DB_PASS}@localhost:5432/${DB_NAME}"
 
 cat > "${APP_DIR}/.env" <<ENVEOF
 DATABASE_URL=${DATABASE_URL}
-PORT=8080
+PORT=${API_PORT}
+API_PORT=${API_PORT}
+WEB_PORT=${WEB_PORT}
 SESSION_SECRET=${SESSION_SECRET}
 NODE_ENV=production
 LOG_LEVEL=info
@@ -257,99 +271,67 @@ log "API server built"
 su - "$APP_USER" -c "cd ${APP_DIR} && BASE_PATH=/ pnpm --filter @workspace/monitoring run build"
 log "Frontend built"
 
-# Allow Nginx (www-data) to read the built frontend files
-chmod -R o+rX "${APP_DIR}/artifacts/monitoring/dist"
-chmod o+x "${APP_DIR}" "${APP_DIR}/artifacts" "${APP_DIR}/artifacts/monitoring"
-
 # ============================================================
-# 10. Configure Nginx
+# 10. PM2 — API + Vite preview (no Nginx)
 # ============================================================
 
-step "10/10 - Configuring Nginx and PM2"
-
-SERVER_NAME="${DOMAIN:-_}"
-
-cat > /etc/nginx/sites-available/monitoring <<NGINXEOF
-server {
-    listen 80;
-    server_name ${SERVER_NAME};
-
-    root ${APP_DIR}/artifacts/monitoring/dist/public;
-    index index.html;
-
-    location /api/ {
-        proxy_pass http://127.0.0.1:8080/api/;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-        proxy_cache_bypass \$http_upgrade;
-        client_max_body_size 50M;
-        proxy_read_timeout 120s;
-    }
-
-    location / {
-        try_files \$uri \$uri/ /index.html;
-    }
-
-    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff2?)$ {
-        expires 30d;
-        add_header Cache-Control "public, immutable";
-    }
-
-    gzip on;
-    gzip_types text/plain text/css application/json application/javascript text/xml application/xml text/javascript image/svg+xml;
-    gzip_min_length 1000;
-}
-NGINXEOF
-
-ln -sf /etc/nginx/sites-available/monitoring /etc/nginx/sites-enabled/
-rm -f /etc/nginx/sites-enabled/default
-
-nginx -t
-systemctl restart nginx
-systemctl enable nginx
-
-log "Nginx configured"
-
-# ============================================================
-# PM2 setup
-# ============================================================
+step "10/10 - Configuring PM2 (API + web, no Nginx)"
 
 mkdir -p /var/log/monitoring
 chown "${APP_USER}:${APP_USER}" /var/log/monitoring
 
 cat > "${APP_DIR}/ecosystem.config.cjs" <<PM2EOF
 module.exports = {
-  apps: [{
-    name: 'monitoring-api',
-    cwd: '${APP_DIR}/artifacts/api-server',
-    script: './dist/index.mjs',
-    node_args: '--enable-source-maps',
-    env: {
-      NODE_ENV: 'production',
-      PORT: 8080,
-      DATABASE_URL: '${DATABASE_URL}',
-      SESSION_SECRET: '${SESSION_SECRET}',
-      LOG_LEVEL: 'info',
+  apps: [
+    {
+      name: 'monitoring-api',
+      cwd: '${APP_DIR}/artifacts/api-server',
+      script: './dist/index.mjs',
+      node_args: '--enable-source-maps',
+      env: {
+        NODE_ENV: 'production',
+        PORT: '${API_PORT}',
+        DATABASE_URL: '${DATABASE_URL}',
+        SESSION_SECRET: '${SESSION_SECRET}',
+        LOG_LEVEL: 'info',
+      },
+      instances: 1,
+      autorestart: true,
+      watch: false,
+      max_memory_restart: '500M',
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+      error_file: '/var/log/monitoring/api-error.log',
+      out_file: '/var/log/monitoring/api-out.log',
+      merge_logs: true,
     },
-    instances: 1,
-    autorestart: true,
-    watch: false,
-    max_memory_restart: '500M',
-    log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
-    error_file: '/var/log/monitoring/api-error.log',
-    out_file: '/var/log/monitoring/api-out.log',
-    merge_logs: true,
-  }]
+    {
+      name: 'monitoring-web',
+      cwd: '${APP_DIR}',
+      script: 'pnpm',
+      args: '--filter @workspace/monitoring run serve',
+      interpreter: 'none',
+      env: {
+        NODE_ENV: 'production',
+        PORT: '${WEB_PORT}',
+        API_PORT: '${API_PORT}',
+        BASE_PATH: '/',
+      },
+      instances: 1,
+      autorestart: true,
+      watch: false,
+      max_memory_restart: '300M',
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+      error_file: '/var/log/monitoring/web-error.log',
+      out_file: '/var/log/monitoring/web-out.log',
+      merge_logs: true,
+    },
+  ],
 };
 PM2EOF
 
 chown "${APP_USER}:${APP_USER}" "${APP_DIR}/ecosystem.config.cjs"
 
+su - "$APP_USER" -c "pm2 delete monitoring-api monitoring-web 2>/dev/null || true"
 su - "$APP_USER" -c "pm2 start ${APP_DIR}/ecosystem.config.cjs"
 su - "$APP_USER" -c "pm2 save"
 
@@ -358,24 +340,15 @@ if [ -n "$PM2_STARTUP" ]; then
   eval "$PM2_STARTUP"
 fi
 
-log "PM2 configured and API server started"
-
-# ============================================================
-# SSL (optional)
-# ============================================================
-
-if [ "$ENABLE_SSL" = "yes" ] && [ -n "$DOMAIN" ]; then
-  step "Bonus - Setting up SSL"
-  certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos --register-unsafely-without-email || warn "SSL setup failed, you can run 'sudo certbot --nginx -d ${DOMAIN}' manually later"
-fi
+log "PM2 configured — API on port ${API_PORT}, web on port ${WEB_PORT}"
 
 # ============================================================
 # Firewall
 # ============================================================
 
 ufw allow 22/tcp   >/dev/null 2>&1 || true
-ufw allow 80/tcp   >/dev/null 2>&1 || true
-ufw allow 443/tcp  >/dev/null 2>&1 || true
+ufw allow "${API_PORT}"/tcp >/dev/null 2>&1 || true
+ufw allow "${WEB_PORT}"/tcp >/dev/null 2>&1 || true
 ufw --force enable >/dev/null 2>&1 || true
 
 # ============================================================
@@ -386,20 +359,20 @@ step "Verifying installation"
 
 sleep 3
 
-API_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/api/health 2>/dev/null || echo "000")
-NGINX_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost 2>/dev/null || echo "000")
+API_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:${API_PORT}/api/health" 2>/dev/null || echo "000")
+WEB_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:${WEB_PORT}/" 2>/dev/null || echo "000")
 
 echo ""
 if [ "$API_STATUS" = "200" ]; then
-  log "API server:  OK (HTTP ${API_STATUS})"
+  log "API server:  OK (HTTP ${API_STATUS} on port ${API_PORT})"
 else
   warn "API server:  HTTP ${API_STATUS} - check 'pm2 logs monitoring-api'"
 fi
 
-if [ "$NGINX_STATUS" = "200" ]; then
-  log "Nginx:       OK (HTTP ${NGINX_STATUS})"
+if [ "$WEB_STATUS" = "200" ]; then
+  log "Web UI:      OK (HTTP ${WEB_STATUS} on port ${WEB_PORT})"
 else
-  warn "Nginx:       HTTP ${NGINX_STATUS} - check 'sudo nginx -t' and 'sudo tail /var/log/nginx/error.log'"
+  warn "Web UI:      HTTP ${WEB_STATUS} - check 'pm2 logs monitoring-web'"
 fi
 
 DB_STATUS=$(PGPASSWORD="${DB_PASS}" psql -h localhost -U "${DB_USER}" -d "${DB_NAME}" -tAc "SELECT COUNT(*) FROM users" 2>/dev/null || echo "fail")
@@ -416,17 +389,12 @@ fi
 step "Installation Complete!"
 
 echo ""
-echo -e "${GREEN}Application URL:${NC}"
-if [ -n "$DOMAIN" ]; then
-  if [ "$ENABLE_SSL" = "yes" ]; then
-    echo "  https://${DOMAIN}"
-  else
-    echo "  http://${DOMAIN}"
-  fi
-else
-  IP=$(hostname -I | awk '{print $1}')
-  echo "  http://${IP}"
-fi
+echo -e "${GREEN}Application URLs:${NC}"
+IP=$(hostname -I | awk '{print $1}')
+echo "  Web UI:  http://${IP}:${WEB_PORT}"
+echo "  API:     http://${IP}:${API_PORT}/api/health"
+echo ""
+echo -e "${YELLOW}Open firewall ports ${WEB_PORT} and ${API_PORT} if accessing from another machine.${NC}"
 
 echo ""
 echo -e "${GREEN}Default admin login:${NC}"
@@ -435,19 +403,17 @@ echo "  Password: admin123"
 
 echo ""
 echo -e "${GREEN}Useful commands:${NC}"
-echo "  pm2 status                      # Check API status"
-echo "  pm2 logs monitoring-api         # View API logs"
-echo "  pm2 restart monitoring-api      # Restart API"
-echo "  sudo systemctl restart nginx    # Restart Nginx"
-echo "  sudo nginx -t                   # Test Nginx config"
-echo "  sudo certbot --nginx -d DOMAIN  # Add SSL later"
+echo "  pm2 status                      # Check API + web"
+echo "  pm2 logs monitoring-api           # API logs"
+echo "  pm2 logs monitoring-web           # Web logs"
+echo "  pm2 restart all                   # Restart both"
+echo "  cd ${APP_DIR} && npm run dev      # Dev mode (same ports via .env)"
 
 echo ""
 echo -e "${GREEN}File locations:${NC}"
 echo "  Application:  ${APP_DIR}"
 echo "  Environment:  ${APP_DIR}/.env"
-echo "  API logs:     /var/log/monitoring/"
-echo "  Nginx config: /etc/nginx/sites-available/monitoring"
+echo "  Logs:         /var/log/monitoring/"
 echo "  PM2 config:   ${APP_DIR}/ecosystem.config.cjs"
 
 echo ""
