@@ -111,6 +111,10 @@ log "Dependencies installed"
 step "3/5 - Building API server"
 
 su - "$APP_USER" -c "cd ${APP_DIR} && set -a && source .env && set +a && pnpm --filter @workspace/api-server run build"
+if [ ! -f "${APP_DIR}/artifacts/api-server/dist/index.mjs" ]; then
+  err "API build failed — missing ${APP_DIR}/artifacts/api-server/dist/index.mjs"
+  exit 1
+fi
 log "API server built"
 
 # ============================================================
@@ -152,7 +156,7 @@ set -a
 # shellcheck source=/dev/null
 source "${APP_DIR}/.env"
 set +a
-API_PORT="${PORT:-5002}"
+API_PORT="${API_PORT:-${PORT:-5002}}"
 WEB_PORT="${WEB_PORT:-5173}"
 
 # ============================================================

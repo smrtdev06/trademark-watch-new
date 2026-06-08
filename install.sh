@@ -266,6 +266,10 @@ fi
 step "9/10 - Building the project"
 
 su - "$APP_USER" -c "cd ${APP_DIR} && set -a && source .env && set +a && pnpm --filter @workspace/api-server run build"
+if [ ! -f "${APP_DIR}/artifacts/api-server/dist/index.mjs" ]; then
+  err "API build failed — missing ${APP_DIR}/artifacts/api-server/dist/index.mjs"
+  exit 1
+fi
 log "API server built"
 
 su - "$APP_USER" -c "cd ${APP_DIR} && BASE_PATH=/ pnpm --filter @workspace/monitoring run build"
