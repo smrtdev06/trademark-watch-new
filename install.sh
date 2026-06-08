@@ -259,6 +259,24 @@ else
   log "Drizzle schema push complete"
 fi
 
+# Tables created by postgres (manual migration) are not owned by the app user — fix that.
+sudo -u postgres psql -d "$DB_NAME" -v ON_ERROR_STOP=1 <<SQLEOF
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO ${DB_USER};
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO ${DB_USER};
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO ${DB_USER};
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO ${DB_USER};
+DO \$\$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT tablename FROM pg_tables WHERE schemaname = 'public' LOOP
+    EXECUTE format('ALTER TABLE public.%I OWNER TO ${DB_USER}', r.tablename);
+  END LOOP;
+  FOR r IN SELECT sequence_name FROM information_schema.sequences WHERE sequence_schema = 'public' LOOP
+    EXECUTE format('ALTER SEQUENCE public.%I OWNER TO ${DB_USER}', r.sequence_name);
+  END LOOP;
+END \$\$;
+SQLEOF
+log "Database ownership granted to ${DB_USER}"
+
 # ============================================================
 # 9. Build the project
 # ============================================================
