@@ -22,7 +22,8 @@ void (async () => {
   try {
     await ensureMonitoringResultsFavoriteColumn();
     await ensureUserProductsTable();
-  } catch {
+  } catch (err) {
+    logger.error({ err }, "Database startup checks failed");
     process.exit(1);
   }
 

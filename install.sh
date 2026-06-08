@@ -359,7 +359,7 @@ step "Verifying installation"
 
 sleep 3
 
-API_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:${API_PORT}/api/health" 2>/dev/null || echo "000")
+API_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:${API_PORT}/api/healthz" 2>/dev/null || echo "000")
 WEB_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:${WEB_PORT}/" 2>/dev/null || echo "000")
 
 echo ""
@@ -392,7 +392,7 @@ echo ""
 echo -e "${GREEN}Application URLs:${NC}"
 IP=$(hostname -I | awk '{print $1}')
 echo "  Web UI:  http://${IP}:${WEB_PORT}"
-echo "  API:     http://${IP}:${API_PORT}/api/health"
+echo "  API:     http://${IP}:${API_PORT}/api/healthz"
 echo ""
 echo -e "${YELLOW}Open firewall ports ${WEB_PORT} and ${API_PORT} if accessing from another machine.${NC}"
 
