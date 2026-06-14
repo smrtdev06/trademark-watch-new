@@ -16,12 +16,13 @@ const apiProxy = {
   },
 };
 
-export default defineConfig({
+export default defineConfig(async ({ command }) => ({
   base: basePath,
   plugins: [
     react(),
     tailwindcss(),
-    runtimeErrorOverlay(),
+    // Dev-only — keeps production build smaller and uses less RAM on small VPS
+    ...(command === "serve" ? [runtimeErrorOverlay()] : []),
     ...(process.env.NODE_ENV !== "production" &&
     process.env.REPL_ID !== undefined
       ? [
@@ -47,6 +48,13 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    sourcemap: false,
+    cssMinify: true,
+    reportCompressedSize: false,
+    chunkSizeWarningLimit: 1200,
+    rollupOptions: {
+      maxParallelFileOps: 2,
+    },
   },
   server: {
     port,
@@ -64,4 +72,4 @@ export default defineConfig({
     allowedHosts: true,
     proxy: apiProxy,
   },
-});
+}));

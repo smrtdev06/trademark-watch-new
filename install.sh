@@ -277,6 +277,12 @@ END \$\$;
 SQLEOF
 log "Database ownership granted to ${DB_USER}"
 
+step "8b/10 - Applying schema patches (subscription / groups)"
+
+chmod +x "${APP_DIR}/scripts/apply-schema-patches.sh"
+bash "${APP_DIR}/scripts/apply-schema-patches.sh" "${APP_DIR}" "${DB_USER}" "${DB_PASS}" "${DB_NAME}"
+log "Schema patches applied"
+
 # ============================================================
 # 9. Build the project
 # ============================================================
@@ -289,6 +295,10 @@ if [ ! -f "${APP_DIR}/artifacts/api-server/dist/index.mjs" ]; then
   exit 1
 fi
 log "API server built"
+
+step "9b/10 - Ensuring swap for frontend build (low-RAM VPS)"
+chmod +x "${APP_DIR}/scripts/ensure-swap.sh"
+bash "${APP_DIR}/scripts/ensure-swap.sh" 2
 
 su - "$APP_USER" -c "cd ${APP_DIR} && BASE_PATH=/ pnpm --filter @workspace/monitoring run build"
 log "Frontend built"

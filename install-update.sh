@@ -79,7 +79,7 @@ fi
 # ============================================================
 
 if [ "$SAME_DIR" = false ]; then
-  step "1/4 - Syncing source files to app dir"
+  step "1/6 - Syncing source files to app dir"
 
   rsync -a \
     --exclude='node_modules' \
@@ -92,23 +92,33 @@ if [ "$SAME_DIR" = false ]; then
   chown -R "${APP_USER}:${APP_USER}" "${APP_DIR}"
   log "Files synced to ${APP_DIR}"
 else
-  step "1/4 - Skipping sync (same directory)"
+  step "1/6 - Skipping sync (same directory)"
 fi
 
 # ============================================================
 # 2. Install dependencies
 # ============================================================
 
-step "2/4 - Installing dependencies"
+step "2/6 - Installing dependencies"
 
 su - "$APP_USER" -c "cd ${APP_DIR} && pnpm install --frozen-lockfile 2>/dev/null || pnpm install"
 log "Dependencies installed"
 
 # ============================================================
-# 3. Build API server (renumbered)
+# 3. Database schema patches (subscription, product group_id, etc.)
 # ============================================================
 
-step "3/5 - Building API server"
+step "3/6 - Applying database schema patches"
+
+chmod +x "${APP_DIR}/scripts/apply-schema-patches.sh"
+bash "${APP_DIR}/scripts/apply-schema-patches.sh" "${APP_DIR}" --superuser
+log "Schema patches applied"
+
+# ============================================================
+# 4. Build API server
+# ============================================================
+
+step "4/6 - Building API server"
 
 su - "$APP_USER" -c "cd ${APP_DIR} && set -a && source .env && set +a && pnpm --filter @workspace/api-server run build"
 if [ ! -f "${APP_DIR}/artifacts/api-server/dist/index.mjs" ]; then
@@ -118,12 +128,18 @@ fi
 log "API server built"
 
 # ============================================================
-# 3. Build frontend
+# 5. Build frontend
 # ============================================================
 
-step "4/5 - Building frontend"
+step "5/6 - Building frontend"
 
-su - "$APP_USER" -c "cd ${APP_DIR} && BASE_PATH=/ pnpm --filter @workspace/monitoring run build"
+chmod +x "${APP_DIR}/scripts/ensure-swap.sh" "${APP_DIR}/scripts/build-frontend.sh"
+bash "${APP_DIR}/scripts/ensure-swap.sh" 2
+
+log "Stopping PM2 temporarily to free RAM for Vite build..."
+su - "$APP_USER" -c "pm2 stop all 2>/dev/null || true"
+
+bash "${APP_DIR}/scripts/build-frontend.sh" "${APP_DIR}" "${APP_USER}"
 log "Frontend built"
 
 # Fix permissions on built frontend
@@ -131,10 +147,10 @@ chmod -R o+rX "${APP_DIR}/artifacts/monitoring/dist" 2>/dev/null || true
 log "Build complete"
 
 # ============================================================
-# 4. Restart services
+# 6. Restart services
 # ============================================================
 
-step "5/5 - Restarting services"
+step "6/6 - Restarting services"
 
 if su - "$APP_USER" -c "pm2 list" 2>/dev/null | grep -q "monitoring-api"; then
   su - "$APP_USER" -c "pm2 restart monitoring-api monitoring-web 2>/dev/null || pm2 restart monitoring-api"
