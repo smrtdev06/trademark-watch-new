@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Layout } from "@/components/layout";
 import { useListProducts } from "@workspace/api-client-react";
 import { Loader2, Plus, X, Pencil, ToggleLeft, ToggleRight } from "lucide-react";
@@ -59,6 +59,7 @@ type FormState = {
   transactionFee: string;
   allowedPaymentMethods: number[];
   allowedFunctions: number[];
+  groupId: string;
 };
 
 const emptyForm = (): FormState => ({
@@ -68,6 +69,7 @@ const emptyForm = (): FormState => ({
   allowedAmountOfAssessments: "", allowedAmountOfImageUploads: "",
   tax: "", transactionFee: "",
   allowedPaymentMethods: [], allowedFunctions: [],
+  groupId: "",
 });
 
 function productToForm(p: any): FormState {
@@ -88,6 +90,7 @@ function productToForm(p: any): FormState {
     transactionFee:    p.transactionFee != null ? String(p.transactionFee) : (p.transaction_fee != null ? String(p.transaction_fee) : ""),
     allowedPaymentMethods: p.allowedPaymentMethods ?? p.allowed_payment_methods ?? [],
     allowedFunctions:      p.allowedFunctions ?? p.allowed_functions ?? [],
+    groupId: p.groupId != null ? String(p.groupId) : (p.group_id != null ? String(p.group_id) : ""),
   };
 }
 
@@ -107,6 +110,15 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 export default function AdminProducts() {
   const { data, isLoading, refetch } = useListProducts();
   const products: any[] = Array.isArray(data) ? data : (data as any)?.data ?? [];
+  const [groups, setGroups] = useState<{ id: number; name: string }[]>([]);
+
+  useEffect(() => {
+    apiFetch("/groups")
+      .then((rows) => {
+        if (Array.isArray(rows)) setGroups(rows);
+      })
+      .catch(() => {});
+  }, []);
 
   const [showModal, setShowModal]   = useState(false);
   const [editId, setEditId]         = useState<number | null>(null);
@@ -182,6 +194,7 @@ export default function AdminProducts() {
         transactionFee:  parseFloat(form.transactionFee || "0"),
         allowedPaymentMethods: form.allowedPaymentMethods,
         allowedFunctions:      form.allowedFunctions,
+        groupId: form.groupId ? parseInt(form.groupId, 10) : null,
       };
 
       const res = editId
@@ -388,6 +401,24 @@ export default function AdminProducts() {
               {/* ── Free trial & availability ── */}
               <SectionLabel>Availability &amp; Free Trial</SectionLabel>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                <div className="col-span-2 sm:col-span-1">
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    Group after payment
+                  </label>
+                  <select
+                    value={form.groupId}
+                    onChange={(e) => f("groupId", e.target.value)}
+                    className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  >
+                    <option value="">No group change</option>
+                    {groups.map((g) => (
+                      <option key={g.id} value={String(g.id)}>{g.name}</option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-400 mt-1">
+                    User is moved to this group after successful payment.
+                  </p>
+                </div>
                 {/* Availability toggle */}
                 <div className="col-span-2 sm:col-span-1">
                   <label className="block text-xs font-medium text-gray-600 mb-2">Available to users</label>

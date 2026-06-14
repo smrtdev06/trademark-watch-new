@@ -5,6 +5,7 @@ import { db, usersTable, userProfilesTable, userStatsTable, groupsTable } from "
 import { LoginBody, RegisterBody } from "@workspace/api-zod";
 import { signToken, requireAuth, type AuthUser } from "../lib/auth";
 import { getDefaultAllMenuPermissions, isAppAdminRole } from "../lib/menuKeys";
+import { getDefaultUserGroupId } from "../lib/subscriptionAccess";
 
 const router: IRouter = Router();
 
@@ -63,7 +64,14 @@ router.post("/auth/register", async (req, res): Promise<void> => {
     return;
   }
   const hash = await bcrypt.hash(password, 10);
-  const [user] = await db.insert(usersTable).values({ name, email, password: hash, phone }).returning();
+  const defaultGroupId = await getDefaultUserGroupId();
+  const [user] = await db.insert(usersTable).values({
+    name,
+    email,
+    password: hash,
+    phone,
+    ...(defaultGroupId ? { groupId: defaultGroupId } : {}),
+  }).returning();
   await db.insert(userProfilesTable).values({ userId: user.id });
   await db.insert(userStatsTable).values({ userId: user.id });
   const authUser: AuthUser = { id: user.id, email: user.email, role: user.role, name: user.name };

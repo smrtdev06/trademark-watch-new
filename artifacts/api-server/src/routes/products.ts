@@ -13,6 +13,7 @@ import {
 } from "@workspace/db";
 import { requireAuth, requireAdmin, parseId } from "../lib/auth";
 import { logger } from "../lib/logger";
+import { assignUserToProductGroup } from "../lib/subscriptionAccess";
 
 const router: IRouter = Router();
 
@@ -735,6 +736,7 @@ router.get("/razor_payment_callback", async (req, res): Promise<void> => {
   // Update user limits
   if (product) {
     await updateUserLimits(userProduct.userId, product);
+    await assignUserToProductGroup(userProduct.userId, product.groupId);
   }
 
   res.redirect(`${invoicesUrl}?message=Payment+status:+${razorpay_payment_link_status}&status=1`);
@@ -796,6 +798,7 @@ router.post("/billing/paypal-subscription", requireAuth, async (req, res): Promi
 
       if (product) {
         await updateUserLimits(userProduct.userId, product);
+        await assignUserToProductGroup(userProduct.userId, product.groupId);
       }
 
       res.json({ status: 200, message: "Payment confirmed", subscription });

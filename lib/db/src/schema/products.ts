@@ -1,5 +1,6 @@
 import { pgTable, serial, text, timestamp, integer, real, boolean, jsonb } from "drizzle-orm/pg-core";
 import { usersTable } from "./users";
+import { groupsTable } from "./groups";
 
 export const productsTable = pgTable("products", {
   id: serial("id").primaryKey(),
@@ -20,6 +21,8 @@ export const productsTable = pgTable("products", {
   freeTrial: boolean("free_trial").default(false),
   freeTrialDays: integer("free_trial_days").default(0),
   daysValidAfterPayment: integer("days_valid_after_payment").default(365),
+  /** User group assigned after successful payment for this product */
+  groupId: integer("group_id").references(() => groupsTable.id, { onDelete: "set null" }),
   /** PayPal catalog product ID created when product is saved with PayPal payment method */
   paypalProductId: text("paypal_product_id"),
   /** PayPal billing plan ID (with optional trial cycle) */

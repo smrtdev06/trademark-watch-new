@@ -93,6 +93,13 @@ export async function ensureUserProductsTable(): Promise<void> {
     if (await tableExists("orders") && !(await columnExists("orders", "details"))) {
       await pool.query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS details JSONB`);
     }
+
+    if (await tableExists("products") && !(await columnExists("products", "group_id"))) {
+      await pool.query(`
+        ALTER TABLE products
+        ADD COLUMN IF NOT EXISTS group_id INTEGER REFERENCES user_groups(id) ON DELETE SET NULL
+      `);
+    }
   } catch (err) {
     if (isPermissionDenied(err)) {
       logger.warn(

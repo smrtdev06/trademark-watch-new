@@ -5,7 +5,9 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { setAuthTokenGetter } from "@workspace/api-client-react";
 import { useUserAccess, hasFunction } from "@/hooks/use-user-access";
+import { useSubscriptionStatus, isBillingPath } from "@/hooks/use-subscription-status";
 import { PaywallScreen } from "@/components/paywall-screen";
+import { useLocation } from "wouter";
 
 setAuthTokenGetter(() => localStorage.getItem("token"));
 
@@ -65,8 +67,10 @@ const queryClient = new QueryClient();
 
 function ProtectedRoute({ component: Component, adminOnly, ...rest }: any) {
   const { token, isLoading, user } = useAuth();
+  const [location] = useLocation();
+  const { hasActiveSubscription, isLoading: subLoading } = useSubscriptionStatus();
 
-  if (isLoading) {
+  if (isLoading || subLoading) {
     return <div className="flex items-center justify-center h-screen">Loading...</div>;
   }
 
@@ -76,6 +80,11 @@ function ProtectedRoute({ component: Component, adminOnly, ...rest }: any) {
 
   if (adminOnly && user?.role !== "admin") {
     return <Redirect to="/" />;
+  }
+
+  const isAdmin = user?.role === "admin";
+  if (!isAdmin && !hasActiveSubscription && !isBillingPath(location)) {
+    return <PaywallScreen />;
   }
 
   return <Route {...rest} component={Component} />;
@@ -92,9 +101,11 @@ function ProtectedRoute({ component: Component, adminOnly, ...rest }: any) {
  */
 function FunctionRoute({ component: Component, requiredFunctions, ...rest }: any) {
   const { token, isLoading: authLoading, user } = useAuth();
+  const [location] = useLocation();
   const { allowedFunctions, isLoading: accessLoading } = useUserAccess();
+  const { hasActiveSubscription, isLoading: subLoading } = useSubscriptionStatus();
 
-  if (authLoading || accessLoading) {
+  if (authLoading || accessLoading || subLoading) {
     return <div className="flex items-center justify-center h-screen">Loading...</div>;
   }
 
@@ -102,8 +113,12 @@ function FunctionRoute({ component: Component, requiredFunctions, ...rest }: any
     return <Redirect to="/login" />;
   }
 
-  // Admins bypass all function checks (mirrors PHP: if admin → return true)
   const isAdmin = user?.role === "admin";
+  if (!isAdmin && !hasActiveSubscription && !isBillingPath(location)) {
+    return <PaywallScreen />;
+  }
+
+  // Admins bypass all function checks (mirrors PHP: if admin → return true)
   if (!isAdmin && !hasFunction(allowedFunctions, ...requiredFunctions)) {
     return <Route {...rest} component={() => <PaywallScreen />} />;
   }

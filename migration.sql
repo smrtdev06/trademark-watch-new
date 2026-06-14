@@ -308,6 +308,7 @@ CREATE TABLE IF NOT EXISTS products (
   free_trial                   BOOLEAN DEFAULT FALSE,
   free_trial_days              INTEGER DEFAULT 0,
   days_valid_after_payment     INTEGER DEFAULT 365,
+  group_id                     INTEGER REFERENCES user_groups(id) ON DELETE SET NULL,
   paypal_product_id            TEXT,
   paypal_plan_id               TEXT,
   created_at                   TIMESTAMP NOT NULL DEFAULT NOW()

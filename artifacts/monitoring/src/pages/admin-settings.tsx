@@ -2,9 +2,13 @@ import { useState, useEffect } from "react";
 import { Layout } from "@/components/layout";
 import { useGetSettings, useUpdateSettings } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Eye, EyeOff, CreditCard, Zap } from "lucide-react";
+import { Loader2, Eye, EyeOff, CreditCard, Zap, Users } from "lucide-react";
 
 const API_BASE = (import.meta as any).env?.VITE_API_URL ?? "/api";
+function getToken() { return localStorage.getItem("token"); }
+function authHeaders() {
+  return { Authorization: `Bearer ${getToken()}`, "Content-Type": "application/json" };
+}
 
 // ---------------------------------------------------------------------------
 // Payment gateway config
@@ -122,6 +126,44 @@ export default function AdminSettings() {
   const [gw, setGw] = useState<PaymentGatewaySettings>(emptyGw);
   const [gwLoading, setGwLoading] = useState(true);
   const [gwSaving, setGwSaving] = useState(false);
+
+  const [groups, setGroups] = useState<{ id: number; name: string }[]>([]);
+  const [defaultGroupId, setDefaultGroupId] = useState<string>("");
+  const [membershipLoading, setMembershipLoading] = useState(true);
+  const [membershipSaving, setMembershipSaving] = useState(false);
+
+  useEffect(() => {
+    Promise.all([
+      fetch(`${API_BASE}/groups`, { headers: authHeaders() }).then((r) => r.json()),
+      fetch(`${API_BASE}/settings/membership`, { headers: authHeaders() }).then((r) => r.json()),
+    ])
+      .then(([groupRows, membership]) => {
+        if (Array.isArray(groupRows)) setGroups(groupRows);
+        const id = membership?.defaultUserGroupId;
+        setDefaultGroupId(id != null ? String(id) : "");
+      })
+      .catch(() => {})
+      .finally(() => setMembershipLoading(false));
+  }, []);
+
+  const handleSaveMembership = async () => {
+    setMembershipSaving(true);
+    try {
+      const r = await fetch(`${API_BASE}/settings/membership`, {
+        method: "PUT",
+        headers: authHeaders(),
+        body: JSON.stringify({
+          defaultUserGroupId: defaultGroupId ? Number(defaultGroupId) : null,
+        }),
+      });
+      if (!r.ok) throw new Error(await r.text());
+      toast({ title: "Membership settings saved" });
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } finally {
+      setMembershipSaving(false);
+    }
+  };
 
   useEffect(() => {
     fetch(`${API_BASE}/settings/payment-gateways`, { credentials: "include" })
@@ -269,6 +311,46 @@ export default function AdminSettings() {
                   {gwSaving ? "Saving…" : "Save Gateway Settings"}
                 </button>
               </div>
+            </>
+          )}
+        </SectionCard>
+
+        {/* ── Membership ───────────────────────────────────────────────────── */}
+        <SectionCard
+          icon={<Users className="w-5 h-5" />}
+          title="Membership"
+          subtitle="Default group for newly registered users (before payment)."
+        >
+          {membershipLoading ? (
+            <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>
+          ) : (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Default group for new members
+                </label>
+                <select
+                  className="w-full border rounded px-3 py-2 text-sm max-w-md"
+                  value={defaultGroupId}
+                  onChange={(e) => setDefaultGroupId(e.target.value)}
+                >
+                  <option value="">None</option>
+                  {groups.map((g) => (
+                    <option key={g.id} value={String(g.id)}>{g.name}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500 mt-2">
+                  Applied on registration. After payment, the user moves to the group configured on the product.
+                </p>
+              </div>
+              <button
+                onClick={handleSaveMembership}
+                disabled={membershipSaving}
+                className="bg-blue-600 text-white px-5 py-2 rounded text-sm font-medium disabled:opacity-50 flex items-center gap-2"
+              >
+                {membershipSaving && <Loader2 className="w-4 h-4 animate-spin" />}
+                {membershipSaving ? "Saving…" : "Save Membership Settings"}
+              </button>
             </>
           )}
         </SectionCard>

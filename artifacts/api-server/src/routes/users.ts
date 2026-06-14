@@ -3,6 +3,10 @@ import bcrypt from "bcryptjs";
 import { eq, sql, and, count } from "drizzle-orm";
 import { db, rawQuery, usersTable, userProfilesTable, userLimitsTable, userStatsTable, monitoringKeywordsTable, alertsTable, domainsTable, logoSearchesTable, socialKeywordsTable, groupsTable, productsTable, userProductsTable } from "@workspace/db";
 import { requireAuth, requireAdmin, parseId } from "../lib/auth";
+import {
+  activatedUserProductWhere,
+  userHasActiveSubscription,
+} from "../lib/subscriptionAccess";
 import { COUNTRY_LIST_ALL, getCountryName } from "../lib/countryList";
 
 function isAdminRole(role: string | undefined): boolean {
@@ -319,13 +323,29 @@ router.put("/users/:id/limits", requireAuth, requireAdmin, async (req, res): Pro
 });
 
 // ---------------------------------------------------------------------------
+// GET /user/subscription-status
+// Used by the frontend to block access when trial/subscription has expired.
+// ---------------------------------------------------------------------------
+
+router.get("/user/subscription-status", requireAuth, async (req, res): Promise<void> => {
+  if (req.user!.role === "admin") {
+    res.json({ hasActiveSubscription: true, status: "admin" });
+    return;
+  }
+
+  const active = await userHasActiveSubscription(req.user!.id);
+  res.json({
+    hasActiveSubscription: active,
+    status: active ? "active" : "expired",
+  });
+});
+
+// ---------------------------------------------------------------------------
 // GET /user/access
 // Returns the list of product function IDs the current user may use.
 // Mirrors PHP ProductPermissions::isFuncsAllowed() + UserProduct::scopeActivated().
 //
-// A user_product is "activated" when:
-//   status = '1' OR status = 'active'
-//   OR (status = '0'/null/'' AND active_until >= now)   ← trial period
+// A user_product is "activated" when active_until >= now and status is paid or trial.
 //
 // Admins always receive the full function list.
 // ---------------------------------------------------------------------------
@@ -339,7 +359,6 @@ router.get("/user/access", requireAuth, async (req, res): Promise<void> => {
   }
 
   const userId = req.user!.id;
-  const now = new Date().toISOString();
 
   // Fetch allowed_functions from every product the user has an activated subscription to.
   // Mirrors PHP: UserProduct::activated()->whereHas('product', status=1)->pluck('allowed_functions')
@@ -349,14 +368,7 @@ router.get("/user/access", requireAuth, async (req, res): Promise<void> => {
     JOIN products p ON p.id = up.product_id
     WHERE up.user_id = ${userId}
       AND p.status = 1
-      AND (
-        up.status = '1' OR up.status = 'active'
-        OR (
-          (up.status = '0' OR up.status IS NULL OR up.status = '')
-          AND up.active_until IS NOT NULL
-          AND up.active_until >= ${now}
-        )
-      )
+      AND ${activatedUserProductWhere}
   `);
 
   // Flatten + deduplicate all function IDs from every matching product

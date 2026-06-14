@@ -3,6 +3,7 @@ import { eq, sql, count, desc } from "drizzle-orm";
 import { db, rawQuery, settingsTable, rolesTable, userSettingsTable, templatesTable, notificationLogsTable, queryLogsTable, userStatsTable, usersTable, monitoringLatestTable } from "@workspace/db";
 import { requireAuth, requireAdmin, parseId } from "../lib/auth";
 import { monitoringGraphQlHeaders } from "../lib/graphqlMonitoringAuth";
+import { getDefaultUserGroupId } from "../lib/subscriptionAccess";
 
 const router: IRouter = Router();
 
@@ -24,6 +25,32 @@ router.put("/settings", requireAuth, requireAdmin, async (req, res): Promise<voi
     }
   }
   res.json({ status: 200, message: "Settings updated" });
+});
+
+router.get("/settings/membership", requireAuth, requireAdmin, async (_req, res): Promise<void> => {
+  const defaultUserGroupId = await getDefaultUserGroupId();
+  res.json({ defaultUserGroupId });
+});
+
+router.put("/settings/membership", requireAuth, requireAdmin, async (req, res): Promise<void> => {
+  const { defaultUserGroupId } = req.body as { defaultUserGroupId?: number | null };
+  const value =
+    defaultUserGroupId === null || defaultUserGroupId === undefined
+      ? ""
+      : String(defaultUserGroupId);
+
+  const [existing] = await db
+    .select()
+    .from(settingsTable)
+    .where(eq(settingsTable.name, "default_user_group_id"));
+
+  if (existing) {
+    await db.update(settingsTable).set({ value }).where(eq(settingsTable.id, existing.id));
+  } else {
+    await db.insert(settingsTable).values({ name: "default_user_group_id", value });
+  }
+
+  res.json({ status: 200, message: "Membership settings updated", defaultUserGroupId: value ? Number(value) : null });
 });
 
 // ---------------------------------------------------------------------------
