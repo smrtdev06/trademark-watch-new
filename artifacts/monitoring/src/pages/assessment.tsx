@@ -1,6 +1,6 @@
 import { Layout } from "@/components/layout";
 import React, { useState, useMemo, useEffect } from "react";
-import { Download, Loader2, ChevronDown, ChevronRight } from "lucide-react";
+import { Download, Loader2, ChevronDown, ChevronRight, FileText } from "lucide-react";
 import { exportToCsv } from "@/lib/export-csv";
 import { useSearchAssessment } from "@workspace/api-client-react";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from "recharts";
@@ -307,6 +307,14 @@ export default function Assessment() {
   const [sectionPages, setSectionPages] = useState<Record<string, number>>({});
   const [sectionEntries, setSectionEntries] = useState<Record<string, number>>({});
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
+  const [genfilesTask, setGenfilesTask] = useState<{
+    id: number;
+    externalTaskId: string;
+    appnoCount: number;
+    status: string;
+  } | null>(null);
+  const [pdfGenerating, setPdfGenerating] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
 
   const isGetEnabled = keyword.length >= 3 && tmClass && searchMode;
 
@@ -322,6 +330,8 @@ export default function Assessment() {
     setTextFilters({});
     setOpenSections({ vhigh: true });
     setSectionPages({});
+    setGenfilesTask(null);
+    setPdfError(null);
     const effectiveMode = searchMode === "phonetic_mode" ? undefined : searchMode;
     searchMutation.mutate({
       data: { name: keyword, className: tmClass || "99", searchMode: effectiveMode || undefined } as any,
@@ -339,7 +349,15 @@ export default function Assessment() {
     setTextFilters({});
     setOpenSections({ vhigh: true });
     setSectionPages({});
+    setGenfilesTask(null);
+    setPdfError(null);
   };
+
+  useEffect(() => {
+    if (responseData?.genfilesTask) {
+      setGenfilesTask(responseData.genfilesTask);
+    }
+  }, [responseData?.genfilesTask]);
 
   const toggleFilterValue = (filterKey: string, value: string) => {
     setFilterValues(prev => {
@@ -407,6 +425,49 @@ export default function Assessment() {
     return all;
   }, [nonModeFilteredGroups]);
 
+  const isPhoneticResults = searchMutation.isSuccess && !isModSearch && searchMode === "phonetic_mode";
+
+  const collectPhoneticAppnos = (): number[] => {
+    const ids = new Set<number>();
+    for (const section of RISK_SECTIONS) {
+      for (const item of riskGroups[section.key] || []) {
+        const n = parseInt(String(item.appno ?? "").replace(/\D/g, ""), 10);
+        if (Number.isFinite(n) && n > 0) ids.add(n);
+      }
+    }
+    return [...ids];
+  };
+
+  const handleGeneratePdf = async () => {
+    const appnos = collectPhoneticAppnos();
+    if (appnos.length === 0) {
+      setPdfError("No application numbers in search results.");
+      return;
+    }
+    setPdfGenerating(true);
+    setPdfError(null);
+    try {
+      const token = localStorage.getItem("token");
+      const r = await fetch(`${API_BASE}/genfiles/tasks`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ appnos, keyword: keyword.trim() }),
+      });
+      const data = await r.json();
+      if (!r.ok) {
+        throw new Error(data.message || "Could not start PDF generation");
+      }
+      setGenfilesTask(data.genfilesTask);
+    } catch (err: unknown) {
+      setPdfError(err instanceof Error ? err.message : "PDF request failed");
+    } finally {
+      setPdfGenerating(false);
+    }
+  };
+
   return (
     <Layout>
       <div className="flex items-center justify-between mb-4">
@@ -439,6 +500,22 @@ export default function Assessment() {
               }} className="bg-teal-500 text-white px-3 py-1.5 rounded text-sm hover:bg-teal-600 flex items-center gap-1">
                 <Download className="w-3 h-3" /> Export
               </button>
+              {isPhoneticResults && (
+                <button
+                  type="button"
+                  onClick={handleGeneratePdf}
+                  disabled={pdfGenerating || genfilesTask?.status === "pending"}
+                  className="bg-violet-600 text-white px-3 py-1.5 rounded text-sm hover:bg-violet-700 disabled:opacity-60 flex items-center gap-1"
+                  title={`Send ${collectPhoneticAppnos().length} application numbers to Genfiles for PDF report`}
+                >
+                  {pdfGenerating ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <FileText className="w-3 h-3" />
+                  )}
+                  {genfilesTask?.status === "ready" ? "PDF ready" : "Generate PDF"}
+                </button>
+              )}
               <button onClick={handleAnotherSearch} className="bg-emerald-500 text-white px-3 py-1.5 rounded text-sm hover:bg-emerald-600">
                 Another Search
               </button>
@@ -446,6 +523,12 @@ export default function Assessment() {
           )}
         </div>
       </div>
+
+      {pdfError && (
+        <div className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {pdfError}
+        </div>
+      )}
 
       {!searchMutation.isSuccess && (
         <div className="bg-white rounded shadow-sm border p-4">
@@ -578,8 +661,8 @@ export default function Assessment() {
 
       {searchMutation.isSuccess && !isModSearch && stats && (
         <div className="mt-4">
-          {searchMode === "phonetic_mode" && responseData?.genfilesTask && (
-            <GenfilesPdfBanner task={responseData.genfilesTask} />
+          {isPhoneticResults && genfilesTask && (
+            <GenfilesPdfBanner task={genfilesTask} />
           )}
           <div className="card mb-1 shadow-none border rounded bg-white">
             <button

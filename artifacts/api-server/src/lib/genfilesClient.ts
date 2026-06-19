@@ -59,8 +59,8 @@ export async function createGenfilesPdfTask(opts: {
   appnos: number[];
   keyword?: string;
 }): Promise<{ externalTaskId: string; localId: number; appnoCount: number } | null> {
-  if (!process.env.GENFILES_API_URL && process.env.GENFILES_ENABLED !== "1") {
-    logger.info("Genfiles integration disabled (set GENFILES_API_URL or GENFILES_ENABLED=1)");
+  if (process.env.GENFILES_DISABLED === "1") {
+    logger.info("Genfiles integration disabled (GENFILES_DISABLED=1)");
     return null;
   }
 
