@@ -1,5 +1,5 @@
 import { Layout } from "@/components/layout";
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { Download, Loader2, ChevronDown, ChevronRight } from "lucide-react";
 import { exportToCsv } from "@/lib/export-csv";
 import { useSearchAssessment } from "@workspace/api-client-react";
@@ -17,6 +17,71 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 const PIE_COLORS = ["#3498db", "#e74c3c", "#2ecc71", "#e67e22", "#9b59b6", "#1abc9c", "#34495e", "#f1c40f", "#e91e63", "#00bcd4", "#795548", "#607d8b", "#ff5722", "#8bc34a", "#673ab7"];
+
+const API_BASE = (import.meta as any).env?.VITE_API_URL ?? "/api";
+
+function GenfilesPdfBanner({
+  task,
+}: {
+  task: { id: number; externalTaskId: string; appnoCount: number; status: string };
+}) {
+  const [status, setStatus] = useState(task.status);
+  const [hasDownload, setHasDownload] = useState(false);
+
+  useEffect(() => {
+    if (status === "ready" || status === "failed") return;
+    const poll = async () => {
+      const token = localStorage.getItem("token");
+      const r = await fetch(`${API_BASE}/genfiles/tasks/${task.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!r.ok) return;
+      const data = await r.json();
+      setStatus(data.status);
+      setHasDownload(Boolean(data.hasDownload));
+    };
+    void poll();
+    const timer = setInterval(poll, 5000);
+    return () => clearInterval(timer);
+  }, [task.id, status]);
+
+  const handleDownload = async () => {
+    const token = localStorage.getItem("token");
+    const r = await fetch(`${API_BASE}/genfiles/tasks/${task.id}/download?index=0`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!r.ok) return;
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `assessment-${task.externalTaskId}.pdf`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div className="mb-4 rounded border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+      <p className="font-medium">PDF report queued ({task.appnoCount} application numbers)</p>
+      <p className="text-blue-700 mt-1">
+        Status: <span className="font-semibold capitalize">{status}</span>
+        {status === "pending" && " — Genfiles is generating your report…"}
+      </p>
+      {hasDownload && status === "ready" && (
+        <button
+          type="button"
+          onClick={handleDownload}
+          className="mt-2 inline-flex items-center gap-1 rounded bg-blue-600 px-3 py-1.5 text-white text-xs hover:bg-blue-700"
+        >
+          <Download className="w-3.5 h-3.5" /> Download PDF
+        </button>
+      )}
+      {status === "failed" && (
+        <p className="text-red-600 mt-1">Report generation failed. Check API logs or try again.</p>
+      )}
+    </div>
+  );
+}
 
 function getStatusBadge(status: string) {
   const s = (status || "").toLowerCase();
@@ -513,6 +578,9 @@ export default function Assessment() {
 
       {searchMutation.isSuccess && !isModSearch && stats && (
         <div className="mt-4">
+          {searchMode === "phonetic_mode" && responseData?.genfilesTask && (
+            <GenfilesPdfBanner task={responseData.genfilesTask} />
+          )}
           <div className="card mb-1 shadow-none border rounded bg-white">
             <button
               className="w-full text-left px-4 py-3 flex items-center justify-between"

@@ -16,6 +16,7 @@ import organizationsRouter from "./organizations";
 import settingsRouter from "./settings";
 import groupsRouter from "./groups";
 import cronTriggerRouter from "./cron-trigger";
+import genfilesRouter from "./genfiles";
 
 const router: IRouter = Router();
 
@@ -36,5 +37,6 @@ router.use(organizationsRouter);
 router.use(settingsRouter);
 router.use(groupsRouter);
 router.use(cronTriggerRouter);
+router.use(genfilesRouter);
 
 export default router;
