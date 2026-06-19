@@ -1,6 +1,5 @@
 import { Router, type IRouter } from "express";
 import { requireAuth } from "../lib/auth";
-import { createGenfilesPdfTask, extractAppnosFromRiskGroups } from "../lib/genfilesClient";
 
 const router: IRouter = Router();
 
@@ -552,36 +551,11 @@ router.post("/assessment", requireAuth, async (req, res): Promise<void> => {
       sectionStatuses[section] = parts.join(", ");
     }
 
-    let genfilesTask: {
-      id: number;
-      externalTaskId: string;
-      appnoCount: number;
-      status: string;
-    } | null = null;
-
-    if (!searchMode) {
-      const appnos = extractAppnosFromRiskGroups(riskGroups);
-      const created = await createGenfilesPdfTask({
-        userId: req.user!.id,
-        appnos,
-        keyword: String(name).trim(),
-      });
-      if (created) {
-        genfilesTask = {
-          id: created.localId,
-          externalTaskId: created.externalTaskId,
-          appnoCount: created.appnoCount,
-          status: "pending",
-        };
-      }
-    }
-
     res.json({
       status: 200,
       searchMode: false,
       riskGroups,
       sectionStatuses,
-      genfilesTask,
       stats: {
         total,
         dropOutRate,

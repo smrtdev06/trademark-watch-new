@@ -3,6 +3,15 @@ import React, { useState, useMemo, useEffect } from "react";
 import { Download, Loader2, ChevronDown, ChevronRight, FileText } from "lucide-react";
 import { exportToCsv } from "@/lib/export-csv";
 import { useSearchAssessment } from "@workspace/api-client-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from "recharts";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -117,6 +126,8 @@ const RISK_SECTIONS = [
   { key: "low", label: "Low", defaultOpen: false },
   { key: "other", label: "Others", defaultOpen: false },
 ];
+
+const DEFAULT_PDF_SECTIONS = new Set(["vhigh", "high"]);
 
 const MODE_FILTER_DEFS = [
   { key: "appno", label: "Number", type: "text" },
@@ -315,6 +326,10 @@ export default function Assessment() {
   } | null>(null);
   const [pdfGenerating, setPdfGenerating] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
+  const [pdfDialogOpen, setPdfDialogOpen] = useState(false);
+  const [selectedPdfSections, setSelectedPdfSections] = useState<Set<string>>(
+    () => new Set(DEFAULT_PDF_SECTIONS),
+  );
 
   const isGetEnabled = keyword.length >= 3 && tmClass && searchMode;
 
@@ -332,6 +347,8 @@ export default function Assessment() {
     setSectionPages({});
     setGenfilesTask(null);
     setPdfError(null);
+    setPdfDialogOpen(false);
+    setSelectedPdfSections(new Set(DEFAULT_PDF_SECTIONS));
     const effectiveMode = searchMode === "phonetic_mode" ? undefined : searchMode;
     searchMutation.mutate({
       data: { name: keyword, className: tmClass || "99", searchMode: effectiveMode || undefined } as any,
@@ -351,13 +368,9 @@ export default function Assessment() {
     setSectionPages({});
     setGenfilesTask(null);
     setPdfError(null);
+    setPdfDialogOpen(false);
+    setSelectedPdfSections(new Set(DEFAULT_PDF_SECTIONS));
   };
-
-  useEffect(() => {
-    if (responseData?.genfilesTask) {
-      setGenfilesTask(responseData.genfilesTask);
-    }
-  }, [responseData?.genfilesTask]);
 
   const toggleFilterValue = (filterKey: string, value: string) => {
     setFilterValues(prev => {
@@ -427,10 +440,10 @@ export default function Assessment() {
 
   const isPhoneticResults = searchMutation.isSuccess && !isModSearch && searchMode === "phonetic_mode";
 
-  const collectPhoneticAppnos = (): number[] => {
+  const collectPhoneticAppnos = (sectionKeys: Iterable<string>): number[] => {
     const ids = new Set<number>();
-    for (const section of RISK_SECTIONS) {
-      for (const item of riskGroups[section.key] || []) {
+    for (const sectionKey of sectionKeys) {
+      for (const item of riskGroups[sectionKey] || []) {
         const n = parseInt(String(item.appno ?? "").replace(/\D/g, ""), 10);
         if (Number.isFinite(n) && n > 0) ids.add(n);
       }
@@ -438,10 +451,31 @@ export default function Assessment() {
     return [...ids];
   };
 
+  const openPdfDialog = () => {
+    setSelectedPdfSections(new Set(DEFAULT_PDF_SECTIONS));
+    setPdfError(null);
+    setPdfDialogOpen(true);
+  };
+
+  const togglePdfSection = (sectionKey: string, checked: boolean) => {
+    setSelectedPdfSections(prev => {
+      const next = new Set(prev);
+      if (checked) next.add(sectionKey);
+      else next.delete(sectionKey);
+      return next;
+    });
+  };
+
+  const selectedPdfAppnoCount = collectPhoneticAppnos(selectedPdfSections).length;
+
   const handleGeneratePdf = async () => {
-    const appnos = collectPhoneticAppnos();
+    if (selectedPdfSections.size === 0) {
+      setPdfError("Select at least one risk section.");
+      return;
+    }
+    const appnos = collectPhoneticAppnos(selectedPdfSections);
     if (appnos.length === 0) {
-      setPdfError("No application numbers in search results.");
+      setPdfError("No application numbers in the selected sections.");
       return;
     }
     setPdfGenerating(true);
@@ -461,6 +495,7 @@ export default function Assessment() {
         throw new Error(data.message || "Could not start PDF generation");
       }
       setGenfilesTask(data.genfilesTask);
+      setPdfDialogOpen(false);
     } catch (err: unknown) {
       setPdfError(err instanceof Error ? err.message : "PDF request failed");
     } finally {
@@ -503,10 +538,9 @@ export default function Assessment() {
               {isPhoneticResults && (
                 <button
                   type="button"
-                  onClick={handleGeneratePdf}
+                  onClick={openPdfDialog}
                   disabled={pdfGenerating || genfilesTask?.status === "pending"}
                   className="bg-violet-600 text-white px-3 py-1.5 rounded text-sm hover:bg-violet-700 disabled:opacity-60 flex items-center gap-1"
-                  title={`Send ${collectPhoneticAppnos().length} application numbers to Genfiles for PDF report`}
                 >
                   {pdfGenerating ? (
                     <Loader2 className="w-3 h-3 animate-spin" />
@@ -524,11 +558,66 @@ export default function Assessment() {
         </div>
       </div>
 
-      {pdfError && (
+      {pdfError && !pdfDialogOpen && (
         <div className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
           {pdfError}
         </div>
       )}
+
+      <Dialog open={pdfDialogOpen} onOpenChange={setPdfDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Generate PDF Report</DialogTitle>
+            <DialogDescription>
+              Choose which risk sections to include in the Genfiles PDF report.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            {RISK_SECTIONS.map(section => {
+              const count = (riskGroups[section.key] || []).length;
+              const checked = selectedPdfSections.has(section.key);
+              return (
+                <label
+                  key={section.key}
+                  className="flex items-center gap-3 rounded border px-3 py-2 cursor-pointer hover:bg-gray-50"
+                >
+                  <Checkbox
+                    checked={checked}
+                    onCheckedChange={value => togglePdfSection(section.key, value === true)}
+                  />
+                  <span className="flex-1 text-sm font-medium">{section.label}</span>
+                  <span className="text-xs text-gray-500">{count} records</span>
+                </label>
+              );
+            })}
+          </div>
+          <p className="text-sm text-gray-600">
+            {selectedPdfAppnoCount} application number{selectedPdfAppnoCount === 1 ? "" : "s"} selected
+          </p>
+          {pdfError && pdfDialogOpen && (
+            <p className="text-sm text-red-600">{pdfError}</p>
+          )}
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={() => setPdfDialogOpen(false)}
+              className="px-3 py-1.5 rounded text-sm border border-gray-300 hover:bg-gray-50"
+              disabled={pdfGenerating}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleGeneratePdf}
+              disabled={pdfGenerating || selectedPdfSections.size === 0 || selectedPdfAppnoCount === 0}
+              className="bg-violet-600 text-white px-3 py-1.5 rounded text-sm hover:bg-violet-700 disabled:opacity-60 flex items-center gap-1"
+            >
+              {pdfGenerating && <Loader2 className="w-3 h-3 animate-spin" />}
+              Generate
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {!searchMutation.isSuccess && (
         <div className="bg-white rounded shadow-sm border p-4">
