@@ -58,7 +58,7 @@ export async function createGenfilesPdfTask(opts: {
   userId: number;
   appnos: number[];
   keyword?: string;
-}): Promise<{ externalTaskId: string; localId: number; appnoCount: number } | null> {
+}): Promise<{ externalTaskId: string; localId: number; appnoCount: number; status: string } | null> {
   if (process.env.GENFILES_DISABLED === "1") {
     logger.info("Genfiles integration disabled (GENFILES_DISABLED=1)");
     return null;
@@ -68,6 +68,16 @@ export async function createGenfilesPdfTask(opts: {
   if (unique.length === 0) return null;
 
   await ensureGenfilesTasksTable();
+
+  const placeholderId = `local-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  const insert = await pool.query<{ id: number }>(
+    `INSERT INTO genfiles_tasks (external_task_id, user_id, keyword, appnos, status)
+     VALUES ($1, $2, $3, $4::jsonb, 'scheduled')
+     RETURNING id`,
+    [placeholderId, opts.userId, opts.keyword ?? null, JSON.stringify(unique)],
+  );
+  const localId = Number(insert.rows[0]?.id ?? 0);
+  if (!localId) return null;
 
   const webhookUrl = getGenfilesWebhookUrl();
   const apiUrl = `${getGenfilesApiUrl()}/api/tasks`;
@@ -94,34 +104,36 @@ export async function createGenfilesPdfTask(opts: {
       json = JSON.parse(text);
     } catch {
       logger.error({ status: resp.status, preview: text.slice(0, 300) }, "Genfiles task: non-JSON response");
+      await pool.query(`UPDATE genfiles_tasks SET status = 'failed', updated_at = NOW() WHERE id = $1`, [localId]);
       return null;
     }
 
     if (!resp.ok || !json?.success || !json?.data?.id) {
       logger.error({ status: resp.status, json }, "Genfiles task creation failed");
+      await pool.query(`UPDATE genfiles_tasks SET status = 'failed', updated_at = NOW() WHERE id = $1`, [localId]);
       return null;
     }
 
     externalTaskId = String(json.data.id);
   } catch (err) {
     logger.error({ err, apiUrl }, "Genfiles task request failed");
+    await pool.query(`UPDATE genfiles_tasks SET status = 'failed', updated_at = NOW() WHERE id = $1`, [localId]);
     return null;
   }
 
-  const insert = await pool.query<{ id: number }>(
-    `INSERT INTO genfiles_tasks (external_task_id, user_id, keyword, appnos, status)
-     VALUES ($1, $2, $3, $4::jsonb, 'pending')
-     RETURNING id`,
-    [externalTaskId, opts.userId, opts.keyword ?? null, JSON.stringify(unique)],
+  await pool.query(
+    `UPDATE genfiles_tasks
+     SET external_task_id = $2, status = 'pending', updated_at = NOW()
+     WHERE id = $1`,
+    [localId, externalTaskId],
   );
 
-  const localId = Number(insert.rows[0]?.id ?? 0);
   logger.info(
     { externalTaskId, localId, appnoCount: unique.length, webhookUrl },
     "Genfiles PDF task created",
   );
 
-  return { externalTaskId, localId, appnoCount: unique.length };
+  return { externalTaskId, localId, appnoCount: unique.length, status: "pending" };
 }
 
 export async function handleGenfilesPdfWebhook(body: {
@@ -171,7 +183,7 @@ export async function handleGenfilesPdfWebhook(body: {
      WHERE id = $1`,
     [
       row.id,
-      localPaths.length > 0 ? "ready" : "failed",
+      localPaths.length > 0 ? "completed" : "failed",
       JSON.stringify(pdfUrls),
       JSON.stringify(localPaths),
     ],
@@ -198,4 +210,84 @@ export async function getGenfilesTaskForUser(localId: number, userId: number) {
     [localId, userId],
   );
   return result.rows[0] ?? null;
+}
+
+export type GenfilesTaskRow = {
+  id: number;
+  external_task_id: string;
+  keyword: string | null;
+  appnos: number[];
+  status: string;
+  pdf_urls: string[] | null;
+  local_paths: string[] | null;
+  created_at: string;
+  updated_at: string;
+};
+
+function normalizeGenfilesStatus(status: string): string {
+  if (status === "ready") return "completed";
+  return status;
+}
+
+export function serializeGenfilesTask(row: GenfilesTaskRow) {
+  const status = normalizeGenfilesStatus(row.status);
+  const localPaths = row.local_paths ?? [];
+  return {
+    id: row.id,
+    externalTaskId: row.external_task_id,
+    keyword: row.keyword,
+    appnoCount: Array.isArray(row.appnos) ? row.appnos.length : 0,
+    status,
+    pdfUrls: row.pdf_urls ?? [],
+    hasDownload: localPaths.length > 0 && (status === "completed" || status === "ready"),
+    pdfCount: localPaths.length,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+const LIST_STATUS_FILTERS: Record<string, string[]> = {
+  scheduled: ["scheduled"],
+  pending: ["pending"],
+  completed: ["completed", "ready"],
+  failed: ["failed"],
+};
+
+export async function listGenfilesTasksForUser(
+  userId: number,
+  opts: { status?: string; limit?: number; offset?: number } = {},
+) {
+  await ensureGenfilesTasksTable();
+
+  const limit = Math.min(Math.max(opts.limit ?? 50, 1), 200);
+  const offset = Math.max(opts.offset ?? 0, 0);
+  const statusKey = opts.status?.toLowerCase();
+  const statuses = statusKey && statusKey !== "all" ? LIST_STATUS_FILTERS[statusKey] : null;
+
+  const params: unknown[] = [userId];
+  let where = "WHERE user_id = $1";
+  if (statuses) {
+    params.push(statuses);
+    where += ` AND status = ANY($${params.length}::text[])`;
+  }
+
+  const countResult = await pool.query<{ count: string }>(
+    `SELECT COUNT(*)::text AS count FROM genfiles_tasks ${where}`,
+    params,
+  );
+
+  params.push(limit, offset);
+  const result = await pool.query<GenfilesTaskRow>(
+    `SELECT id, external_task_id, keyword, appnos, status, pdf_urls, local_paths, created_at, updated_at
+     FROM genfiles_tasks
+     ${where}
+     ORDER BY created_at DESC
+     LIMIT $${params.length - 1} OFFSET $${params.length}`,
+    params,
+  );
+
+  return {
+    total: Number(countResult.rows[0]?.count ?? 0),
+    tasks: result.rows.map(serializeGenfilesTask),
+  };
 }

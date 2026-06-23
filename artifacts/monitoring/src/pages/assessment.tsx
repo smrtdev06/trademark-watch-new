@@ -1,5 +1,6 @@
 import { Layout } from "@/components/layout";
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo } from "react";
+import { Link } from "wouter";
 import { Download, Loader2, ChevronDown, ChevronRight, FileText } from "lucide-react";
 import { exportToCsv } from "@/lib/export-csv";
 import { useSearchAssessment } from "@workspace/api-client-react";
@@ -28,69 +29,6 @@ const STATUS_COLORS: Record<string, string> = {
 const PIE_COLORS = ["#3498db", "#e74c3c", "#2ecc71", "#e67e22", "#9b59b6", "#1abc9c", "#34495e", "#f1c40f", "#e91e63", "#00bcd4", "#795548", "#607d8b", "#ff5722", "#8bc34a", "#673ab7"];
 
 const API_BASE = (import.meta as any).env?.VITE_API_URL ?? "/api";
-
-function GenfilesPdfBanner({
-  task,
-}: {
-  task: { id: number; externalTaskId: string; appnoCount: number; status: string };
-}) {
-  const [status, setStatus] = useState(task.status);
-  const [hasDownload, setHasDownload] = useState(false);
-
-  useEffect(() => {
-    if (status === "ready" || status === "failed") return;
-    const poll = async () => {
-      const token = localStorage.getItem("token");
-      const r = await fetch(`${API_BASE}/genfiles/tasks/${task.id}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!r.ok) return;
-      const data = await r.json();
-      setStatus(data.status);
-      setHasDownload(Boolean(data.hasDownload));
-    };
-    void poll();
-    const timer = setInterval(poll, 5000);
-    return () => clearInterval(timer);
-  }, [task.id, status]);
-
-  const handleDownload = async () => {
-    const token = localStorage.getItem("token");
-    const r = await fetch(`${API_BASE}/genfiles/tasks/${task.id}/download?index=0`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!r.ok) return;
-    const blob = await r.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `assessment-${task.externalTaskId}.pdf`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  return (
-    <div className="mb-4 rounded border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
-      <p className="font-medium">PDF report queued ({task.appnoCount} application numbers)</p>
-      <p className="text-blue-700 mt-1">
-        Status: <span className="font-semibold capitalize">{status}</span>
-        {status === "pending" && " — Genfiles is generating your report…"}
-      </p>
-      {hasDownload && status === "ready" && (
-        <button
-          type="button"
-          onClick={handleDownload}
-          className="mt-2 inline-flex items-center gap-1 rounded bg-blue-600 px-3 py-1.5 text-white text-xs hover:bg-blue-700"
-        >
-          <Download className="w-3.5 h-3.5" /> Download PDF
-        </button>
-      )}
-      {status === "failed" && (
-        <p className="text-red-600 mt-1">Report generation failed. Check API logs or try again.</p>
-      )}
-    </div>
-  );
-}
 
 function getStatusBadge(status: string) {
   const s = (status || "").toLowerCase();
@@ -318,12 +256,7 @@ export default function Assessment() {
   const [sectionPages, setSectionPages] = useState<Record<string, number>>({});
   const [sectionEntries, setSectionEntries] = useState<Record<string, number>>({});
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
-  const [genfilesTask, setGenfilesTask] = useState<{
-    id: number;
-    externalTaskId: string;
-    appnoCount: number;
-    status: string;
-  } | null>(null);
+  const [pdfQueued, setPdfQueued] = useState(false);
   const [pdfGenerating, setPdfGenerating] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [pdfDialogOpen, setPdfDialogOpen] = useState(false);
@@ -345,7 +278,7 @@ export default function Assessment() {
     setTextFilters({});
     setOpenSections({ vhigh: true });
     setSectionPages({});
-    setGenfilesTask(null);
+    setPdfQueued(false);
     setPdfError(null);
     setPdfDialogOpen(false);
     setSelectedPdfSections(new Set(DEFAULT_PDF_SECTIONS));
@@ -366,7 +299,7 @@ export default function Assessment() {
     setTextFilters({});
     setOpenSections({ vhigh: true });
     setSectionPages({});
-    setGenfilesTask(null);
+    setPdfQueued(false);
     setPdfError(null);
     setPdfDialogOpen(false);
     setSelectedPdfSections(new Set(DEFAULT_PDF_SECTIONS));
@@ -494,8 +427,8 @@ export default function Assessment() {
       if (!r.ok) {
         throw new Error(data.message || "Could not start PDF generation");
       }
-      setGenfilesTask(data.genfilesTask);
       setPdfDialogOpen(false);
+      setPdfQueued(true);
     } catch (err: unknown) {
       setPdfError(err instanceof Error ? err.message : "PDF request failed");
     } finally {
@@ -539,7 +472,7 @@ export default function Assessment() {
                 <button
                   type="button"
                   onClick={openPdfDialog}
-                  disabled={pdfGenerating || genfilesTask?.status === "pending"}
+                  disabled={pdfGenerating}
                   className="bg-violet-600 text-white px-3 py-1.5 rounded text-sm hover:bg-violet-700 disabled:opacity-60 flex items-center gap-1"
                 >
                   {pdfGenerating ? (
@@ -547,7 +480,7 @@ export default function Assessment() {
                   ) : (
                     <FileText className="w-3 h-3" />
                   )}
-                  {genfilesTask?.status === "ready" ? "PDF ready" : "Generate PDF"}
+                  Generate PDF
                 </button>
               )}
               <button onClick={handleAnotherSearch} className="bg-emerald-500 text-white px-3 py-1.5 rounded text-sm hover:bg-emerald-600">
@@ -557,6 +490,16 @@ export default function Assessment() {
           )}
         </div>
       </div>
+
+      {pdfQueued && (
+        <div className="mb-3 rounded border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">
+          PDF report queued. Track progress on{" "}
+          <Link href="/pdf-reports" className="font-medium text-violet-700 hover:underline">
+            PDF Reports
+          </Link>
+          . You will be able to download when Genfiles completes the job.
+        </div>
+      )}
 
       {pdfError && !pdfDialogOpen && (
         <div className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -750,9 +693,6 @@ export default function Assessment() {
 
       {searchMutation.isSuccess && !isModSearch && stats && (
         <div className="mt-4">
-          {isPhoneticResults && genfilesTask && (
-            <GenfilesPdfBanner task={genfilesTask} />
-          )}
           <div className="card mb-1 shadow-none border rounded bg-white">
             <button
               className="w-full text-left px-4 py-3 flex items-center justify-between"

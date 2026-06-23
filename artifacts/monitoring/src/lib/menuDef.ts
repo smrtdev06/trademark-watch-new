@@ -26,6 +26,7 @@ export const mainMenu: MenuDef[] = [
     label: "Search",
     children: [
       { type: "link", key: "search.assessment", label: "New Trademark", href: "/assessment" },
+      { type: "link", key: "search.pdf_reports", label: "PDF Reports", href: "/pdf-reports" },
       { type: "link", key: "search.license", label: "License", href: "/license" },
       { type: "link", key: "search.opposition", label: "Oppositions", href: "/search_opposition" },
       { type: "link", key: "search.proprietor", label: "Proprietor", href: "/proprietor" },

@@ -18,6 +18,7 @@ import AlertsAdd from "./pages/alerts-add";
 import AlertsList from "./pages/alerts-list";
 import AlertsResults from "./pages/alerts-results";
 import Assessment from "./pages/assessment";
+import PdfReports from "./pages/pdf-reports";
 import License from "./pages/license";
 import Opposition from "./pages/opposition";
 import Proprietor from "./pages/proprietor";
@@ -140,6 +141,7 @@ function AppRouter() {
 
       {/* function_Assessment (60) — mirrors PHP: /assessment */}
       <FunctionRoute path="/assessment" component={Assessment} requiredFunctions={[60]} />
+      <FunctionRoute path="/pdf-reports" component={PdfReports} requiredFunctions={[60]} />
 
       <ProtectedRoute path="/license" component={License} />
       <ProtectedRoute path="/search_opposition" component={Opposition} />

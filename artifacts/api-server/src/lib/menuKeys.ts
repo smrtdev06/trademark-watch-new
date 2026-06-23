@@ -10,6 +10,7 @@ const MENU_GROUP_KEYS = [
   "alerts.results",
   "search",
   "search.assessment",
+  "search.pdf_reports",
   "search.license",
   "search.opposition",
   "search.proprietor",

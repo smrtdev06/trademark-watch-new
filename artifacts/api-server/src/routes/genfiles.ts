@@ -6,6 +6,8 @@ import {
   createGenfilesPdfTask,
   getGenfilesTaskForUser,
   handleGenfilesPdfWebhook,
+  listGenfilesTasksForUser,
+  serializeGenfilesTask,
 } from "../lib/genfilesClient";
 import { logger } from "../lib/logger";
 
@@ -55,9 +57,18 @@ router.post("/genfiles/tasks", requireAuth, async (req, res): Promise<void> => {
       id: task.localId,
       externalTaskId: task.externalTaskId,
       appnoCount: task.appnoCount,
-      status: "pending",
+      status: task.status,
     },
   });
+});
+
+router.get("/genfiles/tasks", requireAuth, async (req, res): Promise<void> => {
+  const status = typeof req.query.status === "string" ? req.query.status : "all";
+  const limit = parseInt(String(req.query.limit ?? "50"), 10) || 50;
+  const offset = parseInt(String(req.query.offset ?? "0"), 10) || 0;
+
+  const result = await listGenfilesTasksForUser(req.user!.id, { status, limit, offset });
+  res.json({ status: 200, ...result });
 });
 
 router.get("/genfiles/tasks/:id", requireAuth, async (req, res): Promise<void> => {
@@ -68,17 +79,7 @@ router.get("/genfiles/tasks/:id", requireAuth, async (req, res): Promise<void> =
     return;
   }
 
-  res.json({
-    id: row.id,
-    externalTaskId: row.external_task_id,
-    keyword: row.keyword,
-    appnoCount: Array.isArray(row.appnos) ? row.appnos.length : 0,
-    status: row.status,
-    pdfUrls: row.pdf_urls ?? [],
-    hasDownload: Array.isArray(row.local_paths) && row.local_paths.length > 0,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  });
+  res.json(serializeGenfilesTask(row));
 });
 
 router.get("/genfiles/tasks/:id/download", requireAuth, async (req, res): Promise<void> => {
